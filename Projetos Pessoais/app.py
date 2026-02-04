@@ -14,7 +14,6 @@ def load_data():
     scope = ["https://www.googleapis.com/auth/spreadsheets",
              "https://www.googleapis.com/auth/drive"]
 
-    # Lógica Híbrida: Nuvem (Secrets) ou Local (Arquivo)
     try:
         creds_info = st.secrets["gcp_service_account"]
         creds = Credentials.from_service_account_info(creds_info, scopes=scope)
@@ -31,7 +30,6 @@ def load_data():
     data = sheet.get_all_records()
     df = pd.DataFrame(data)
 
-    # 1. Limpeza da coluna Valor (Converte R$ para número)
     if 'Valor' in df.columns:
         df['Valor'] = (
             df['Valor']
@@ -43,10 +41,9 @@ def load_data():
         )
         df['Valor'] = pd.to_numeric(df['Valor'], errors='coerce').fillna(0)
 
-    # 2. Tratamento rigoroso de DATAS
     if 'Data' in df.columns:
         df['Data'] = pd.to_datetime(df['Data'], dayfirst=True, errors='coerce')
-        df = df.dropna(subset=['Data'])  # Remove o que não for data válida (limpa o 'nan')
+        df = df.dropna(subset=['Data'])
         df['Mes_Ano'] = df['Data'].dt.strftime('%Y-%m')
 
     return df
@@ -57,22 +54,18 @@ try:
     df = load_data()
 
     if df.empty:
-        st.warning("Aguardando dados válidos na planilha (verifique a coluna Data).")
+        st.warning("Aguardando dados válidos na planilha.")
     else:
         st.title("📊 Meu Dashboard Financeiro")
 
         # --- SIDEBAR (FILTROS) ---
         st.sidebar.header("Configurações de Filtro")
-
-        # Filtro de Mês/Ano para as Métricas e Pizza
         lista_meses = sorted(df['Mes_Ano'].unique().tolist(), reverse=True)
         mes_selecionado = st.sidebar.selectbox("Mês de análise detalhada", lista_meses)
 
-        # Filtro de Categoria
         lista_cat = sorted([c for c in df["Categoria"].unique().tolist() if c])
         cat_escolhidas = st.sidebar.multiselect("Filtrar Categorias", lista_cat, default=lista_cat)
 
-        # --- PREPARAÇÃO DOS DADOS FILTRADOS ---
         df_mes = df[df['Mes_Ano'] == mes_selecionado]
         df_filtrado = df_mes[df_mes["Categoria"].isin(cat_escolhidas)]
 
@@ -89,11 +82,11 @@ try:
 
         st.divider()
 
-        # --- GRÁFICO 1: EVOLUÇÃO DIA A DIA (Histórico Real) ---
-        st.subheader("📈 Evolução Financeira (Datas Reais da Planilha)")
+        # --- GRÁFICO 1: EVOLUÇÃO DIA A DIA COM CATEGORIA NO HOVER ---
+        st.subheader("📈 Evolução Financeira Detalhada")
 
-        # Aqui agrupamos pela DATA exata para o gráfico não ficar travado no dia 1º
-        df_evolucao_real = df.groupby(['Data', col_tipo])['Valor'].sum().reset_index()
+        # Agrupamos por Data, Tipo E Categoria para não perder a informação na legenda interna
+        df_evolucao_real = df.groupby(['Data', col_tipo, 'Categoria'])['Valor'].sum().reset_index()
 
         fig_evolucao = px.line(
             df_evolucao_real,
@@ -101,11 +94,12 @@ try:
             y='Valor',
             color=col_tipo,
             markers=True,
+            hover_data={'Categoria': True, 'Data': '|%d/%m/%y', 'Valor': ':,.2f'},  # <-- A mágica está aqui!
             color_discrete_map={"ENTRADA": "#2ecc71", "SAÍDA": "#e74c3c"},
-            labels={"Data": "Dia da Transação", "Valor": "Valor (R$)"},
+            labels={"Data": "Dia", "Valor": "Valor (R$)", "Categoria": "Categoria"},
             template="plotly_dark"
         )
-        # Melhora a exibição das datas no eixo X
+
         fig_evolucao.update_xaxes(tickformat="%d/%m/%y", dtick="D1")
         st.plotly_chart(fig_evolucao, use_container_width=True)
 
@@ -134,7 +128,6 @@ try:
             )
             st.plotly_chart(fig_bar, use_container_width=True)
 
-        # --- TABELA DE CONFERÊNCIA ---
         with st.expander("🔍 Visualizar lista de lançamentos deste mês"):
             st.dataframe(df_filtrado.sort_values("Data", ascending=False), use_container_width=True)
 
