@@ -14,58 +14,61 @@ def load_data():
     scope = ["https://www.googleapis.com/auth/spreadsheets",
              "https://www.googleapis.com/auth/drive"]
 
-    # Tenta carregar as credenciais
+    # Tenta carregar as credenciais (Híbrido: Nuvem ou Local)
     try:
-        creds = Credentials.from_service_account_file("credentials.json", scopes=scope)
-    except:
-        creds = Credentials.from_service_account_file("Projetos Pessoais/credentials.json", scopes=scope)
+        # 1. Tenta usar os Secrets do Streamlit Cloud
+        creds_info = st.secrets["gcp_service_account"]
+        creds = Credentials.from_service_account_info(creds_info, scopes=scope)
+    except Exception:
+        # 2. Se falhar, tenta usar o arquivo local no seu PC
+        try:
+            creds = Credentials.from_service_account_file("Projetos Pessoais/credentials.json", scopes=scope)
+        except:
+            creds = Credentials.from_service_account_file("credentials.json", scopes=scope)
 
     client = gspread.authorize(creds)
 
-    # 1. ABRE A PLANILHA PELO NOME
+    # Abre a planilha e a aba exata
     spreadsheet = client.open("Controle Financeiro Mensal com Gráficos")
-
-    # 2. SELECIONA A ABA EXATA (Baseado na sua imagem image_798fe1.png)
     sheet = spreadsheet.worksheet("Controle de Gastos")
 
     data = sheet.get_all_records()
     df = pd.DataFrame(data)
 
-    # 3. LIMPEZA DOS DADOS (Removendo R$ e convertendo para número)
-    # Note que na sua print a coluna chama-se exatamente "Valor"
+    # Limpeza da coluna Valor (converte R$ para número)
     if 'Valor' in df.columns:
-        df['Valor'] = df['Valor'].astype(str).str.replace('R$', '', regex=False)
-        df['Valor'] = df['Valor'].str.replace('.', '', regex=False)
-        df['Valor'] = df['Valor'].str.replace(',', '.', regex=False)
-        df['Valor'] = pd.to_numeric(df['Valor'].str.strip(), errors='coerce').fillna(0)
+        df['Valor'] = (
+            df['Valor']
+            .astype(str)
+            .str.replace('R$', '', regex=False)
+            .str.replace('.', '', regex=False)
+            .str.replace(',', '.', regex=False)
+            .str.strip()
+        )
+        df['Valor'] = pd.to_numeric(df['Valor'], errors='coerce').fillna(0)
 
     return df
 
 
-# --- INTERFACE ---
+# --- INTERFACE DO DASHBOARD ---
 try:
     df = load_data()
 
     if df.empty:
-        st.warning("A aba 'Controle de Gastos' foi encontrada, mas não contém dados.")
+        st.warning("A aba 'Controle de Gastos' foi encontrada, mas está sem dados.")
     else:
         st.title("📊 Meu Dashboard Financeiro")
+        st.markdown(f"Status: **Conectado com sucesso!**")
 
-        # --- FILTROS NA SIDEBAR ---
+        # --- FILTROS ---
         st.sidebar.header("Filtros")
+        lista_cat = [c for c in df["Categoria"].unique().tolist() if c]
+        escolha = st.sidebar.multiselect("Selecione as Categorias", lista_cat, default=lista_cat)
 
-        # Filtro de Categoria (Coluna 'Categoria' na sua planilha)
-        lista_categorias = df["Categoria"].unique().tolist()
-        # Remove valores vazios da lista de filtros
-        lista_categorias = [c for c in lista_categorias if c]
-
-        escolha = st.sidebar.multiselect("Categorias", lista_categorias, default=lista_categorias)
         df_filtrado = df[df["Categoria"].isin(escolha)]
 
-        # --- CARTÕES DE MÉTRICAS ---
-        # Usando o nome exato da sua coluna: "Tipo (Entrada/Saída)"
+        # --- MÉTRICAS ---
         col_tipo = "Tipo (Entrada/Saída)"
-
         entradas = df_filtrado[df_filtrado[col_tipo] == "ENTRADA"]["Valor"].sum()
         saidas = df_filtrado[df_filtrado[col_tipo] == "SAÍDA"]["Valor"].sum()
         saldo = entradas - saidas
@@ -75,26 +78,36 @@ try:
         c2.metric("Total Saídas", f"R$ {saidas:,.2f}")
         c3.metric("Saldo Real", f"R$ {saldo:,.2f}")
 
+        st.divider()
+
         # --- GRÁFICOS ---
         col_esq, col_dir = st.columns(2)
 
         with col_esq:
             st.subheader("Gastos por Categoria")
-            fig_pizza = px.pie(df_filtrado[df_filtrado[col_tipo] == "SAÍDA"], values="Valor", names="Categoria",
-                               hole=0.4)
+            fig_pizza = px.pie(
+                df_filtrado[df_filtrado[col_tipo] == "SAÍDA"],
+                values="Valor",
+                names="Categoria",
+                hole=0.4
+            )
             st.plotly_chart(fig_pizza, use_container_width=True)
 
         with col_dir:
             st.subheader("Entradas vs Saídas")
-            fig_bar = px.bar(df_filtrado.groupby(col_tipo)["Valor"].sum().reset_index(),
-                             x=col_tipo, y="Valor", color=col_tipo,
-                             color_discrete_map={"ENTRADA": "#2ecc71", "SAÍDA": "#e74c3c"})
+            fig_bar = px.bar(
+                df_filtrado.groupby(col_tipo)["Valor"].sum().reset_index(),
+                x=col_tipo,
+                y="Valor",
+                color=col_tipo,
+                color_discrete_map={"ENTRADA": "#2ecc71", "SAÍDA": "#e74c3c"}
+            )
             st.plotly_chart(fig_bar, use_container_width=True)
 
-        st.divider()
-        st.dataframe(df_filtrado)
+        # --- TABELA ---
+        with st.expander("Ver dados brutos"):
+            st.dataframe(df_filtrado, use_container_width=True)
 
 except Exception as e:
-    st.error(f"Erro detalhado: {e}")
-    st.info(
-        "Dica: Verifique se os nomes das colunas na Planilha são exatamente: 'Data', 'Categoria', 'Tipo (Entrada/Saída)' e 'Valor'.")
+    st.error("Erro ao carregar o dashboard.")
+    st.info(f"Detalhe técnico: {e}")
