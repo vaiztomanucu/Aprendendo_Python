@@ -85,22 +85,27 @@ try:
             df_para_evolucao = df[df["Categoria"].isin(cat_escolhidas)]
             df_para_investimentos = df
             texto_periodo = "Histórico Total"
-            intervalo_ms = 10 * 24 * 60 * 60 * 1000  # 10 dias para (1, 10, 20, 30)
+            intervalo_ms = 10 * 24 * 60 * 60 * 1000
         else:
             df_para_evolucao = df_mes[df_mes["Categoria"].isin(cat_escolhidas)]
             df_para_investimentos = df_mes
             texto_periodo = mes_visual
-            intervalo_ms = 5 * 24 * 60 * 60 * 1000  # 5 dias para (1, 5, 10...)
+            intervalo_ms = 5 * 24 * 60 * 60 * 1000
 
         # --- MÉTRICAS DO MÊS ---
         entradas_total = df_mes_entradas['Valor'].sum()
         saidas_total = df_mes_saidas['Valor'].sum()
         saldo_mensal = entradas_total + saidas_total
 
-        m1, m2, m3 = st.columns(3)
+        # Cálculo do Saldo Acumulado (Tudo até a data máxima do mês selecionado)
+        data_limite = df_mes['Data'].max()
+        saldo_acumulado = df[df['Data'] <= data_limite]['Valor'].sum()
+
+        m1, m2, m3, m4 = st.columns(4)
         m1.metric("Entradas", f"R$ {entradas_total:,.2f}")
         m2.metric("Saídas", f"R$ {abs(saidas_total):,.2f}")
         m3.metric("Saldo Líquido", f"R$ {saldo_mensal:,.2f}", delta=f"{saldo_mensal:,.2f}")
+        m4.metric("Saldo Acumulado", f"R$ {saldo_acumulado:,.2f}", delta=f"{saldo_acumulado:,.2f}")
 
         st.divider()
 
