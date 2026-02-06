@@ -78,7 +78,6 @@ try:
         df_mes_Receitas = df_mes[df_mes['Valor'] > 0]
         df_mes_saidas = df_mes[df_mes['Valor'] < 0]
 
-        # Lógica de Data para o Eixo X
         data_referencia = df['Data'].min().replace(day=1)
 
         if ver_tudo:
@@ -134,15 +133,11 @@ try:
         st.divider()
         st.subheader(f"💰 Evolução de Investimentos ({texto_periodo})")
 
-        # --- ALTERAÇÃO SOLICITADA: Cor condicional no Valor ---
         total_invest_acumulado = df[df["Categoria"].str.contains("Investimento", case=False, na=False)]["Valor"].sum()
         cor_valor = "#2ecc71" if total_invest_acumulado >= 0 else "#e74c3c"
-
-        st.write(f'''
-            <p style="font-size:16px; font-weight:bold;">
-                Total Investido: <span style="color:{cor_valor};">R$ {total_invest_acumulado:,.2f}</span>
-            </p>
-            ''', unsafe_allow_html=True)
+        st.write(
+            f'<p style="font-size:16px; font-weight:bold;">Total Investido: <span style="color:{cor_valor};">R$ {total_invest_acumulado:,.2f}</span></p>',
+            unsafe_allow_html=True)
 
         df_invest = df_para_investimentos[
             df_para_investimentos["Categoria"].str.contains("Investimento", case=False, na=False)]
@@ -220,8 +215,32 @@ try:
         else:
             st.info("Sem gastos registrados para este mês.")
 
+        # --- ALTERAÇÃO SOLICITADA: LISTA DE LANÇAMENTOS ---
         with st.expander(f"🔍 Lista de lançamentos - {mes_visual}"):
-            st.dataframe(df_mes.sort_values("Data", ascending=False), use_container_width=True)
+            # 1. Copia e remove as 3 últimas colunas
+            df_lista = df_mes.iloc[:, :-3].copy()
+
+            # 2. Formata a Data (apenas dia/mês/ano)
+            df_lista['Data'] = df_lista['Data'].dt.strftime('%d/%m/%Y')
+
+            # 3. Ordena pela data original ou exibida
+            df_lista = df_lista.sort_values("Data", ascending=False)
+
+
+            # 4. Função para colorir a coluna Valor
+            def color_valor(val):
+                color = '#2ecc71' if val > 0 else '#e74c3c'
+                return f'color: {color}; font-weight: bold'
+
+
+            # 5. Aplica estilo e formatação
+            lista_styled = (
+                df_lista.style
+                .map(color_valor, subset=['Valor'])
+                .format({"Valor": "R$ {:,.2f}"})
+            )
+
+            st.dataframe(lista_styled, use_container_width=True, hide_index=True)
 
 except Exception as e:
     st.error(f"Erro crítico no processamento: {e}")
