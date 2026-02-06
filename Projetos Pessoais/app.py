@@ -14,7 +14,6 @@ def load_data():
     scope = ["https://www.googleapis.com/auth/spreadsheets",
              "https://www.googleapis.com/auth/drive"]
 
-    # Lógica de Credenciais (Nuvem ou Local)
     try:
         creds_info = st.secrets["gcp_service_account"]
         creds = Credentials.from_service_account_info(creds_info, scopes=scope)
@@ -31,7 +30,6 @@ def load_data():
     data = sheet.get_all_records()
     df = pd.DataFrame(data)
 
-    # 1. Limpeza da coluna Valor
     if 'Valor' in df.columns:
         df['Valor'] = (
             df['Valor']
@@ -43,7 +41,6 @@ def load_data():
         )
         df['Valor'] = pd.to_numeric(df['Valor'], errors='coerce').fillna(0)
 
-    # 2. Tratamento de Datas (Evita o erro 'nan')
     if 'Data' in df.columns:
         df['Data'] = pd.to_datetime(df['Data'], dayfirst=True, errors='coerce')
         df = df.dropna(subset=['Data'])
@@ -57,7 +54,7 @@ try:
     df = load_data()
 
     if df.empty:
-        st.warning("Nenhum dado válido encontrado na planilha. Verifique as datas.")
+        st.warning("Aguardando dados válidos na planilha.")
     else:
         st.title("📊 Meu Dashboard Financeiro")
 
@@ -69,11 +66,10 @@ try:
         lista_cat = sorted([c for c in df["Categoria"].unique().tolist() if c])
         cat_escolhidas = st.sidebar.multiselect("Filtrar Categorias", lista_cat, default=lista_cat)
 
-        # Dados filtrados para métricas e pizza
         df_mes = df[df['Mes_Ano'] == mes_selecionado]
         df_filtrado = df_mes[df_mes["Categoria"].isin(cat_escolhidas)]
 
-        # --- MÉTRICAS DO MÊS ---
+        # --- MÉTRICAS ---
         col_tipo = "Tipo (Entrada/Saída)"
         entradas = df_mes[df_mes[col_tipo] == "ENTRADA"]["Valor"].sum()
         saidas = df_mes[df_mes[col_tipo] == "SAÍDA"]["Valor"].sum()
@@ -86,10 +82,10 @@ try:
 
         st.divider()
 
-        # --- GRÁFICO 1: EVOLUÇÃO DIA A DIA (AJUSTADO) ---
+        # --- GRÁFICO 1: EVOLUÇÃO (CORREÇÃO DE MÚLTIPLAS INFOS NO MESMO DIA) ---
         st.subheader("📈 Evolução Financeira Detalhada")
 
-        # Agrupamento para garantir que a categoria apareça individualmente
+        # Agrupamos por Data, Tipo e Categoria para garantir que transações diferentes no mesmo dia apareçam
         df_evol_real = df.groupby(['Data', col_tipo, 'Categoria'])['Valor'].sum().reset_index()
 
         fig_evolucao = px.line(
@@ -102,19 +98,16 @@ try:
             template="plotly_dark"
         )
 
-        # CUSTOMIZAÇÃO DO HOVER (Remove sinais de = e nomes de colunas brutos)
+        # Ajuste do Hover para mostrar TODAS as categorias do dia de forma limpa
         fig_evolucao.update_traces(
             customdata=df_evol_real[['Categoria']],
-            hovertemplate="<b>Data:</b> %{x|%d/%m/%y}<br>" +
-                          "<b>Valor:</b> R$ %{y:,.2f}<br>" +
-                          "<b>Categoria:</b> %{customdata[0]}<extra></extra>"
+            hovertemplate="<b>Valor:</b> R$ %{y:,.2f}<br><b>Cat:</b> %{customdata[0]}<extra></extra>"
         )
 
-        # LIMPEZA DE LEGENDAS E EIXOS
         fig_evolucao.update_layout(
-            hovermode="x unified",
-            legend_title_text='',  # Remove "Tipo (Entrada/Saída)" da legenda
-            xaxis_title="",  # Remove o título "Dia"
+            hovermode="x unified",  # Mostra todos os pontos daquela data verticalmente
+            legend_title_text='',
+            xaxis_title="",
             yaxis_title="Valor (R$)",
             legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
         )
@@ -122,34 +115,26 @@ try:
         fig_evolucao.update_xaxes(tickformat="%d/%m/%y", dtick="M1" if len(df_evol_real) > 30 else "D1")
         st.plotly_chart(fig_evolucao, use_container_width=True)
 
-        # --- GRÁFICOS DO MÊS SELECIONADO ---
+        # --- GRÁFICOS DO MÊS ---
         c1, c2 = st.columns(2)
-
         with c1:
             st.subheader(f"Gastos por Categoria ({mes_selecionado})")
             fig_pizza = px.pie(
                 df_filtrado[df_filtrado[col_tipo] == "SAÍDA"],
-                values="Valor",
-                names="Categoria",
-                hole=0.4,
+                values="Valor", names="Categoria", hole=0.4,
                 color_discrete_sequence=px.colors.qualitative.T10
             )
             st.plotly_chart(fig_pizza, use_container_width=True)
-
         with c2:
             st.subheader(f"Entradas vs Saídas ({mes_selecionado})")
             fig_bar = px.bar(
                 df_mes.groupby(col_tipo)["Valor"].sum().reset_index(),
-                x=col_tipo,
-                y="Valor",
-                color=col_tipo,
+                x=col_tipo, y="Valor", color=col_tipo,
                 color_discrete_map={"ENTRADA": "#2ecc71", "SAÍDA": "#e74c3c"}
             )
-            # Limpeza rápida na legenda do gráfico de barra também
             fig_bar.update_layout(showlegend=False, xaxis_title="", yaxis_title="Total (R$)")
             st.plotly_chart(fig_bar, use_container_width=True)
 
-        # --- TABELA ---
         with st.expander("🔍 Ver lançamentos deste mês"):
             st.dataframe(df_filtrado.sort_values("Data", ascending=False), use_container_width=True)
 
