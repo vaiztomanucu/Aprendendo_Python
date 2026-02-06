@@ -78,11 +78,11 @@ try:
 
         if ver_tudo:
             df_para_evolucao = df[df["Categoria"].isin(cat_escolhidas)]
-            df_para_investimentos = df  # Histórico total para investimentos
+            df_para_investimentos = df
             texto_periodo = "Histórico Total"
         else:
             df_para_evolucao = df_filtrado_mes
-            df_para_investimentos = df_mes  # Apenas mês atual para investimentos
+            df_para_investimentos = df_mes
             texto_periodo = mes_visual
 
         # --- MÉTRICAS DO MÊS ---
@@ -126,16 +126,14 @@ try:
                              color_discrete_map={"ENTRADA": "#2ecc71", "SAÍDA": "#e74c3c"})
             st.plotly_chart(fig_bar, use_container_width=True)
 
-        # --- NOVA SEÇÃO: EVOLUÇÃO DE INVESTIMENTOS ---
+        # --- SEÇÃO: EVOLUÇÃO DE INVESTIMENTOS (COM HOVER CORRIGIDO) ---
         st.divider()
         st.subheader(f"🚀 Evolução de Investimentos ({texto_periodo})")
 
-        # Filtramos apenas o que contém "Investimento"
         df_invest = df_para_investimentos[
             df_para_investimentos["Categoria"].str.contains("Investimento", case=False, na=False)]
 
         if not df_invest.empty:
-            # Agrupamos por Data e Categoria para o gráfico de linha
             df_invest_plot = df_invest.groupby(['Data', 'Categoria'])['Valor'].sum().reset_index()
 
             fig_invest = px.line(
@@ -144,15 +142,26 @@ try:
                 y='Valor',
                 color='Categoria',
                 markers=True,
-                title="Acompanhamento de Aportes",
                 template="plotly_dark"
             )
 
-            fig_invest.update_layout(hovermode="x unified")
+            # --- AJUSTE DA CAIXA DE INFORMAÇÕES (HOVER) ---
+            fig_invest.update_traces(
+                hovertemplate="<b>Data:</b> %{x|%d/%m/%y}<br>" +
+                              "<b>Valor:</b> R$ %{y:,.2f}<extra></extra>"
+            )
+
+            fig_invest.update_layout(
+                hovermode="closest",
+                xaxis_title="",
+                yaxis_title="Valor (R$)",
+                showlegend=True,
+                legend_title_text=''
+            )
+
             fig_invest.update_xaxes(tickformat="%d/%m/%y", tickangle=45, nticks=10)
             st.plotly_chart(fig_invest, use_container_width=True)
 
-            # Métrica rápida de total investido no período
             total_inv_periodo = df_invest["Valor"].sum()
             st.info(f"O valor total investido em {texto_periodo} foi de **R$ {total_inv_periodo:,.2f}**")
         else:
