@@ -169,19 +169,11 @@ try:
             df_pizza['Valor'] = df_pizza['Valor'].abs()
             if not df_pizza.empty:
                 cores_categorias = {
-                    "Amazon 🎬": "#ADD8E6",  # azul claro
-                    "Spotify 🎧": "#006400",  # verde escuro
-                    "Academia 💪": "#808080",  # cinza
-                    "Telefone 📞": "#F08080",  # vermelho claro
-                    "Apple 🍎": "#FFFFFF",  # branco
-                    "Barbeiro 💈": "#8B4513",  # castanho
-                    "Uber 🚗": "#000000",  # preto
-                    "Alimentação 🍟": "#FFA500",  # laranja
-                    "Roupas 👕": "#00008B",  # azul escuro
-                    "Jogos 🎮": "#8B0000",  # vermelho escuro
-                    "Outros ❓": "#800080",  # roxo
-                    "Pensão 💵": "#90EE90",  # verde claro
-                    "Investimento 🏦": "#90EE90"  # verde claro
+                    "Amazon 🎬": "#ADD8E6", "Spotify 🎧": "#006400", "Academia 💪": "#808080",
+                    "Telefone 📞": "#F08080", "Apple 🍎": "#FFFFFF", "Barbeiro 💈": "#8B4513",
+                    "Uber 🚗": "#000000", "Alimentação 🍟": "#FFA500", "Roupas 👕": "#00008B",
+                    "Jogos 🎮": "#8B0000", "Outros ❓": "#800080", "Pensão 💵": "#90EE90",
+                    "Investimento 🏦": "#90EE90"
                 }
 
                 fig_pizza = px.pie(
@@ -206,6 +198,32 @@ try:
                              labels={"Total": "Valor (R$)"})
             fig_bar.update_traces(hovertemplate="<b>Status:</b> %{x}<br><b>Total:</b> R$ %{y:,.2f}<extra></extra>")
             st.plotly_chart(fig_bar, use_container_width=True)
+
+        # --- NOVO GRÁFICO: RECORRÊNCIA DOS GASTOS ---
+        st.subheader("🔄 Recorrência dos Gastos")
+        if not df_mes_saidas.empty:
+            df_rec = df_mes_saidas.copy()
+            df_rec['Valor_Abs'] = df_rec['Valor'].abs()
+            df_rec_plot = df_rec.groupby("Recorrência")["Valor_Abs"].sum().reset_index()
+
+            fig_recorrencia = px.bar(
+                df_rec_plot,
+                x="Recorrência",
+                y="Valor_Abs",
+                color="Recorrência",
+                template="plotly_dark",
+                color_discrete_map={
+                    "Fixos": "#3498db",        # Azul
+                    "Recorrentes": "#f1c40f",  # Amarelo
+                    "Não Recorrentes": "#e74c3c" # Vermelho
+                },
+                labels={"Valor_Abs": "Total (R$)"}
+            )
+            # AJUSTE DA CAIXA DE INFORMAÇÕES (HOVER)
+            fig_recorrencia.update_traces(
+                hovertemplate="<b>Recorrência:</b> %{x}<br><b>Total:</b> R$ %{y:,.2f}<extra></extra>"
+            )
+            st.plotly_chart(fig_recorrencia, use_container_width=True)
 
         # --- RESUMO POR CATEGORIA ---
         st.markdown("### 📋 Resumo de Gastos por Categoria")
@@ -238,39 +256,28 @@ try:
         else:
             st.info("Sem gastos registrados para este mês.")
 
-        # --- ALTERAÇÃO SOLICITADA: LISTA DE LANÇAMENTOS COM SOMAS ---
+        # --- LISTA DE LANÇAMENTOS ---
         with st.expander(f"🔍 Lista de lançamentos - {mes_visual}"):
 
-            # Cálculo das somas específicas para a lista
             total_receitas_lista = df_mes[df_mes['Valor'] > 0]['Valor'].sum()
             total_despesas_lista = df_mes[df_mes['Valor'] < 0]['Valor'].sum()
 
-            # Exibição das somas em colunas para organização
             col_rec, col_desp = st.columns(2)
             col_rec.markdown(f"**Total Receitas:** <span style='color:#2ecc71'>R$ {total_receitas_lista:,.2f}</span>",
                              unsafe_allow_html=True)
             col_desp.markdown(
                 f"**Total Despesas:** <span style='color:#e74c3c'>R$ {abs(total_despesas_lista):,.2f}</span>",
                 unsafe_allow_html=True)
-            st.write("")  # Espaçamento
+            st.write("")
 
-            # 1. Copia e remove as 3 últimas colunas
             df_lista = df_mes.iloc[:, :-3].copy()
-
-            # 2. Formata a Data (apenas dia/mês/ano)
             df_lista['Data'] = df_lista['Data'].dt.strftime('%d/%m/%Y')
-
-            # 3. Ordena pela data original ou exibida
             df_lista = df_lista.sort_values("Data", ascending=False)
 
-
-            # 4. Função para colorir a coluna Valor
             def color_valor(val):
                 color = '#2ecc71' if val > 0 else '#e74c3c'
                 return f'color: {color}; font-weight: bold'
 
-
-            # 5. Aplica estilo e formatação
             lista_styled = (
                 df_lista.style
                 .map(color_valor, subset=['Valor'])
