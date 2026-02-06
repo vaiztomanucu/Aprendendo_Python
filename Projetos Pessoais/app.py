@@ -75,7 +75,7 @@ try:
 
         # --- PREPARAÇÃO DOS DADOS ---
         df_mes = df[df['Mes_Ano'] == mes_selecionado]
-        df_mes_entradas = df_mes[df_mes['Valor'] > 0]
+        df_mes_Receitas = df_mes[df_mes['Valor'] > 0]
         df_mes_saidas = df_mes[df_mes['Valor'] < 0]
 
         # Lógica de Data para o Eixo X: Começar no dia 01
@@ -93,17 +93,17 @@ try:
             intervalo_ms = 5 * 24 * 60 * 60 * 1000  # 5 dias para (1, 5, 10...)
 
         # --- MÉTRICAS DO MÊS ---
-        entradas_total = df_mes_entradas['Valor'].sum()
+        Receitas_total = df_mes_Receitas['Valor'].sum()
         saidas_total = df_mes_saidas['Valor'].sum()
-        saldo_mensal = entradas_total + saidas_total
+        saldo_mensal = Receitas_total + saidas_total
 
         # Cálculo do Saldo Acumulado (Soma de tudo até o mês selecionado)
         data_limite = df_mes['Data'].max()
         saldo_acumulado = df[df['Data'] <= data_limite]['Valor'].sum()
 
         m1, m2, m3, m4 = st.columns(4)
-        m1.metric("Entradas", f"R$ {entradas_total:,.2f}")
-        m2.metric("Saídas", f"R$ {abs(saidas_total):,.2f}")
+        m1.metric("Receitas", f"R$ {Receitas_total:,.2f}")
+        m2.metric("Despesas", f"R$ {abs(saidas_total):,.2f}")
         m3.metric("Saldo Mensal", f"R$ {saldo_mensal:,.2f}", delta=f"{saldo_mensal:,.2f}")
         m4.metric("Saldo Acumulado", f"R$ {saldo_acumulado:,.2f}", delta=f"{saldo_acumulado:,.2f}")
 
@@ -169,11 +169,11 @@ try:
         with c2:
             st.subheader("Balanço Mensal")
             df_balanco = pd.DataFrame({
-                'Status': ['Entradas', 'Saídas'],
-                'Total': [entradas_total, abs(saidas_total)]
+                'Status': ['Receitas', 'Despesas'],
+                'Total': [Receitas_total, abs(saidas_total)]
             })
             fig_bar = px.bar(df_balanco, x='Status', y='Total', color='Status',
-                             color_discrete_map={"Entradas": "#2ecc71", "Saídas": "#e74c3c"},
+                             color_discrete_map={"Receitas": "#2ecc71", "Despesas": "#e74c3c"},
                              labels={"Total": "Valor (R$)"})
             fig_bar.update_traces(hovertemplate="<b>Status:</b> %{x}<br><b>Total:</b> R$ %{y:,.2f}<extra></extra>")
             st.plotly_chart(fig_bar, use_container_width=True)
@@ -189,7 +189,7 @@ try:
                 .sort_values(by="Valor", ascending=False)
             )
 
-            # Cálculo do total de saídas e anexação da linha TOTAL
+            # Cálculo do total de Despesas e anexação da linha TOTAL
             total_gastos = resumo_cat["Valor"].sum()
             linha_total = pd.DataFrame({"Categoria": ["TOTAL"], "Valor": [total_gastos]})
             resumo_final = pd.concat([resumo_cat, linha_total], ignore_index=True)
