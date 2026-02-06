@@ -78,43 +78,38 @@ try:
         df_mes_entradas = df_mes[df_mes['Valor'] > 0]
         df_mes_saidas = df_mes[df_mes['Valor'] < 0]
 
-        # Lógica de Data para o Eixo X
+        # Lógica de Data para o Eixo X: Começar no dia 01
         data_referencia = df['Data'].min().replace(day=1)
 
         if ver_tudo:
             df_para_evolucao = df[df["Categoria"].isin(cat_escolhidas)]
             df_para_investimentos = df
             texto_periodo = "Histórico Total"
-            intervalo_ms = 10 * 24 * 60 * 60 * 1000
+            intervalo_ms = 10 * 24 * 60 * 60 * 1000  # 10 dias para (1, 10, 20, 30)
         else:
             df_para_evolucao = df_mes[df_mes["Categoria"].isin(cat_escolhidas)]
             df_para_investimentos = df_mes
             texto_periodo = mes_visual
-            intervalo_ms = 5 * 24 * 60 * 60 * 1000
+            intervalo_ms = 5 * 24 * 60 * 60 * 1000  # 5 dias para (1, 5, 10...)
 
-        # --- CÁLCULO DAS MÉTRICAS ---
+        # --- MÉTRICAS DO MÊS ---
         entradas_total = df_mes_entradas['Valor'].sum()
         saidas_total = df_mes_saidas['Valor'].sum()
         saldo_mensal = entradas_total + saidas_total
 
-        # CÁLCULO DO SALDO ACUMULADO (Soma tudo até o último dia do mês selecionado)
-        data_limite = df_mes['Data'].max()
-        saldo_acumulado = df[df['Data'] <= data_limite]['Valor'].sum()
-
-        # EXIBIÇÃO EM 4 COLUNAS
-        m1, m2, m3, m4 = st.columns(4)
+        m1, m2, m3 = st.columns(3)
         m1.metric("Entradas", f"R$ {entradas_total:,.2f}")
         m2.metric("Saídas", f"R$ {abs(saidas_total):,.2f}")
-        m3.metric("Saldo Líquido", f"R$ {saldo_mensal:,.2f}")
-        m4.metric("Saldo Acumulado", f"R$ {saldo_acumulado:,.2f}",
-                  help="Soma de todo o histórico até o mês selecionado")
+        m3.metric("Saldo Líquido", f"R$ {saldo_mensal:,.2f}", delta=f"{saldo_mensal:,.2f}")
 
         st.divider()
 
         # --- GRÁFICO 1: EVOLUÇÃO FINANCEIRA ---
         st.subheader("📈 Evolução Financeira Detalhada")
+
         df_para_evolucao = df_para_evolucao.copy()
         df_para_evolucao['Status'] = df_para_evolucao['Valor'].apply(lambda x: 'ENTRADA' if x > 0 else 'SAÍDA')
+
         df_plot = df_para_evolucao.groupby(['Data', 'Status', 'Categoria'])['Valor'].sum().reset_index()
         df_plot['Valor_Grafico'] = df_plot['Valor'].abs()
 
@@ -146,6 +141,7 @@ try:
             fig_invest.update_traces(
                 hovertemplate="<b>Data:</b> %{x|%d/%m/%Y}<br><b>Movimentação:</b> R$ %{y:,.2f}<extra></extra>")
             st.plotly_chart(fig_invest, use_container_width=True)
+
             total_inv_periodo = df_invest["Valor"].sum()
             st.info(f"💸 Saldo de movimentações em investimentos em {texto_periodo}: **R$ {total_inv_periodo:,.2f}**")
         else:
@@ -167,7 +163,10 @@ try:
                 st.plotly_chart(fig_pizza, use_container_width=True)
         with c2:
             st.subheader("Balanço")
-            df_balanco = pd.DataFrame({'Status': ['Entradas', 'Saídas'], 'Total': [entradas_total, abs(saidas_total)]})
+            df_balanco = pd.DataFrame({
+                'Status': ['Entradas', 'Saídas'],
+                'Total': [entradas_total, abs(saidas_total)]
+            })
             fig_bar = px.bar(df_balanco, x='Status', y='Total', color='Status',
                              color_discrete_map={"Entradas": "#2ecc71", "Saídas": "#e74c3c"},
                              labels={"Total": "Valor (R$)"})
@@ -177,19 +176,33 @@ try:
         # --- RESUMO POR CATEGORIA COM TOTAL DESTACADO ---
         st.markdown("### 📋 Resumo de Gastos por Categoria")
         if not df_mes_saidas.empty:
-            resumo_cat = (df_mes_saidas.groupby("Categoria")["Valor"].sum().abs().reset_index().sort_values(by="Valor",
-                                                                                                            ascending=False))
+            resumo_cat = (
+                df_mes_saidas.groupby("Categoria")["Valor"]
+                .sum()
+                .abs()
+                .reset_index()
+                .sort_values(by="Valor", ascending=False)
+            )
+
+            # Cálculo do total de saídas e anexação da linha TOTAL
             total_gastos = resumo_cat["Valor"].sum()
             linha_total = pd.DataFrame({"Categoria": ["TOTAL"], "Valor": [total_gastos]})
             resumo_final = pd.concat([resumo_cat, linha_total], ignore_index=True)
 
 
+            # Função para aplicar a cor vermelha na linha do TOTAL
             def highlight_total(row):
                 return ['background-color: #990000; color: white; font-weight: bold' if row.Categoria == 'TOTAL' else ''
                         for _ in row]
 
 
-            resumo_styled = (resumo_final.style.apply(highlight_total, axis=1).format({"Valor": "R$ {:,.2f}"}))
+            # Estilização e Formatação Monetária
+            resumo_styled = (
+                resumo_final.style
+                .apply(highlight_total, axis=1)
+                .format({"Valor": "R$ {:,.2f}"})
+            )
+
             st.dataframe(resumo_styled, use_container_width=True, hide_index=True)
         else:
             st.info("Sem gastos registrados para este mês.")
