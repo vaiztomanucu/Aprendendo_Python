@@ -199,14 +199,15 @@ try:
             fig_bar.update_traces(hovertemplate="<b>Status:</b> %{x}<br><b>Total:</b> R$ %{y:,.2f}<extra></extra>")
             st.plotly_chart(fig_bar, use_container_width=True)
 
-        # --- NOVO GRÁFICO: RECORRÊNCIA DOS GASTOS ---
+        # --- NOVO GRÁFICO: RECORRÊNCIA DOS GASTOS (SOMENTE SAÍDAS) ---
         st.subheader("🔄 Recorrência dos Gastos")
         if not df_mes_saidas.empty:
             df_rec = df_mes_saidas.copy()
             df_rec['Valor_Abs'] = df_rec['Valor'].abs()
 
-            # Agrupamento para o gráfico
-            df_rec_plot = df_rec.groupby("Recorrência")["Valor_Abs"].sum().reset_index()
+            # Garantimos que não existam "Receitas" aqui filtrando novamente
+            df_rec_plot = df_rec[df_rec['Recorrência'] != 'Receitas'].groupby("Recorrência")[
+                "Valor_Abs"].sum().reset_index()
 
             fig_recorrencia = px.bar(
                 df_rec_plot,
@@ -214,20 +215,18 @@ try:
                 y="Valor_Abs",
                 color="Recorrência",
                 template="plotly_dark",
-                # AJUSTE DE CORES SOLICITADO
+                # CORES CORRIGIDAS: Vermelho, Amarelo e Azul
                 color_discrete_map={
-                    "Não Recorrentes": "#e74c3c",  # Vermelho
-                    "Fixos": "#3498db",  # Azul
-                    "Recorrentes": "#f1c40f"  # Amarelo
+                    "Não Recorrentes": "#FF0000",  # Vermelho Puro
+                    "Recorrentes": "#FFFF00",  # Amarelo Puro
+                    "Fixos": "#0000FF"  # Azul Puro
                 },
                 labels={"Valor_Abs": "Total (R$)"}
             )
 
-            # FORMATAÇÃO DA CAIXA DE INFORMAÇÕES (HOVER)
             fig_recorrencia.update_traces(
                 hovertemplate="<b>Recorrência:</b> %{x}<br><b>Total:</b> R$ %{y:,.2f}<extra></extra>"
             )
-
             st.plotly_chart(fig_recorrencia, use_container_width=True)
 
         # --- RESUMO POR CATEGORIA ---
