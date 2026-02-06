@@ -212,7 +212,6 @@ try:
                 labels={"Valor_Abs": "Total (R$)"}
             )
 
-            # --- AJUSTE SOLICITADO: Diminuir largura das barras ---
             fig_recorrencia.update_layout(bargap=0.5)
 
             fig_recorrencia.update_traces(
@@ -235,9 +234,11 @@ try:
             linha_total = pd.DataFrame({"Categoria": ["TOTAL"], "Valor": [total_gastos]})
             resumo_final = pd.concat([resumo_cat, linha_total], ignore_index=True)
 
+
             def highlight_total(row):
                 return ['background-color: #5D1F1F; color: white; font-weight: bold' if row.Categoria == 'TOTAL' else ''
                         for _ in row]
+
 
             resumo_styled = (
                 resumo_final.style
@@ -249,13 +250,24 @@ try:
 
         # --- LISTA DE LANÇAMENTOS ---
         with st.expander(f"🔍 Lista de lançamentos - {mes_visual}"):
+
+            # --- AJUSTE: Filtro de ordenação ---
+            ordem_data = st.radio("Ordenar por data:", ["Mais recentes primeiro", "Mais antigos primeiro"],
+                                  horizontal=True)
+            ascendente = True if ordem_data == "Mais antigos primeiro" else False
+
             df_lista = df_mes.iloc[:, :-3].copy()
+
+            # Aplicamos a ordenação antes de formatar a data como string
+            df_lista = df_lista.sort_values("Data", ascending=ascendente)
+
             df_lista['Data'] = df_lista['Data'].dt.strftime('%d/%m/%Y')
-            df_lista = df_lista.sort_values("Data", ascending=False)
+
 
             def color_valor(val):
                 color = '#81C784' if val > 0 else '#E57373'
                 return f'color: {color}; font-weight: bold'
+
 
             lista_styled = (
                 df_lista.style
