@@ -165,7 +165,6 @@ try:
             df_pizza = df_mes_saidas.copy()
             df_pizza['Valor'] = df_pizza['Valor'].abs()
             if not df_pizza.empty:
-                # Ajuste: Removido o dicionário manual para usar paleta Pastel suave e automática
                 fig_pizza = px.pie(
                     df_pizza,
                     values="Valor",
@@ -212,6 +211,9 @@ try:
                 },
                 labels={"Valor_Abs": "Total (R$)"}
             )
+
+            # --- AJUSTE SOLICITADO: Diminuir largura das barras ---
+            fig_recorrencia.update_layout(bargap=0.5)
 
             fig_recorrencia.update_traces(
                 hovertemplate="<b>Recorrência:</b> %{x}<br><b>Total:</b> R$ %{y:,.2f}<extra></extra>"
