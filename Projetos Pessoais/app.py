@@ -251,16 +251,19 @@ try:
         # --- LISTA DE LANÇAMENTOS ---
         with st.expander(f"🔍 Lista de lançamentos - {mes_visual}"):
 
-            # --- AJUSTE: Filtro de ordenação ---
+            # --- AJUSTE: Filtro de ordenação corrigido ---
             ordem_data = st.radio("Ordenar por data:", ["Mais recentes", "Mais antigos"],
                                   horizontal=True)
-            ascendente = True if ordem_data == "Mais antigos primeiro" else False
+
+            # Ajuste na lógica: "Mais antigos" é ascendente (True), "Mais recentes" é descendente (False)
+            ascendente = True if ordem_data == "Mais antigos" else False
 
             df_lista = df_mes.iloc[:, :-3].copy()
 
-            # Aplicamos a ordenação antes de formatar a data como string
+            # Aplicamos a ordenação na coluna de Data (formato datetime)
             df_lista = df_lista.sort_values("Data", ascending=ascendente)
 
+            # Só depois de ordenar, formatamos para exibição
             df_lista['Data'] = df_lista['Data'].dt.strftime('%d/%m/%Y')
 
 
