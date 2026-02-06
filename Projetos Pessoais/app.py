@@ -252,7 +252,7 @@ try:
         with st.expander(f"🔍 Lista de lançamentos - {mes_visual}"):
 
             # --- AJUSTE: Filtro de ordenação ---
-            ordem_data = st.radio("Ordenar por data:", ["Mais recentes primeiro", "Mais antigos primeiro"],
+            ordem_data = st.radio("Ordenar por data:", ["Mais recentes", "Mais antigos"],
                                   horizontal=True)
             ascendente = True if ordem_data == "Mais antigos primeiro" else False
 
