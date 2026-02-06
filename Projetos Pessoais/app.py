@@ -64,3 +64,110 @@ try:
 
         # Filtro de Mês
         lista_meses = sorted(df['Mes_Ano'].unique().tolist(), reverse=True)
+        mes_selecionado = st.sidebar.selectbox("Mês de análise detalhada", lista_meses)
+
+        # Filtro de Histórico vs Mês (Para o Gráfico de Evolução)
+        ver_tudo = st.sidebar.checkbox("Visualizar todo o histórico no gráfico", value=False)
+
+        # Filtro de Categorias
+        lista_cat = sorted([c for c in df["Categoria"].unique().tolist() if c])
+        cat_escolhidas = st.sidebar.multiselect("Filtrar Categorias", lista_cat, default=lista_cat)
+
+        # --- PREPARAÇÃO DOS DADOS ---
+        # Dados do mês selecionado para métricas e pizza
+        df_mes = df[df['Mes_Ano'] == mes_selecionado]
+        df_filtrado_mes = df_mes[df_mes["Categoria"].isin(cat_escolhidas)]
+
+        # Lógica para o Gráfico de Evolução (Respeita o checkbox 'ver_tudo')
+        if ver_tudo:
+            df_para_evolucao = df[df["Categoria"].isin(cat_escolhidas)]
+        else:
+            df_para_evolucao = df_filtrado_mes
+
+        # --- MÉTRICAS DO MÊS ---
+        entradas = df_mes[df_mes[col_tipo] == "ENTRADA"]["Valor"].sum()
+        saidas = df_mes[df_mes[col_tipo] == "SAÍDA"]["Valor"].sum()
+        saldo = entradas - saidas
+
+        m1, m2, m3 = st.columns(3)
+        m1.metric(f"Entradas ({mes_selecionado})", f"R$ {entradas:,.2f}")
+        m2.metric(f"Saídas ({mes_selecionado})", f"R$ {saidas:,.2f}")
+        m3.metric("Saldo Mensal", f"R$ {saldo:,.2f}", delta=f"{saldo:,.2f}")
+
+        st.divider()
+
+        # --- GRÁFICO 1: EVOLUÇÃO FINANCEIRA ---
+        st.subheader("📈 Evolução Financeira Detalhada")
+
+        # Agrupamento para manter o gráfico organizado
+        df_plot = df_para_evolucao.groupby(['Data', col_tipo, 'Categoria'])['Valor'].sum().reset_index()
+
+        fig_evolucao = px.line(
+            df_plot,
+            x='Data',
+            y='Valor',
+            color=col_tipo,
+            markers=True,
+            color_discrete_map={"ENTRADA": "#2ecc71", "SAÍDA": "#e74c3c"},
+            template="plotly_dark",
+            custom_data=['Categoria']
+        )
+
+        # Ajuste do Hover (Limpo e sem sinais de =)
+        fig_evolucao.update_traces(
+            hovertemplate="<b>Data:</b> %{x|%d/%m/%y}<br>" +
+                          "<b>Valor:</b> R$ %{y:,.2f}<br>" +
+                          "<b>Categoria:</b> %{customdata[0]}<extra></extra>"
+        )
+
+        # Ajuste do Layout e Eixo X (Inclinado e com limite de tiques)
+        fig_evolucao.update_layout(
+            hovermode="closest",
+            legend_title_text='',
+            xaxis_title="",
+            yaxis_title="Valor (R$)",
+            legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
+        )
+
+        fig_evolucao.update_xaxes(
+            tickformat="%d/%m/%y",
+            tickangle=45,
+            nticks=10,  # Evita o amontoado de datas
+            showgrid=True,
+            gridcolor='rgba(255, 255, 255, 0.1)'
+        )
+
+        st.plotly_chart(fig_evolucao, use_container_width=True)
+
+        # --- GRÁFICOS INFERIORES (MÊS SELECIONADO) ---
+        c1, c2 = st.columns(2)
+
+        with c1:
+            st.subheader(f"Gastos por Categoria ({mes_selecionado})")
+            fig_pizza = px.pie(
+                df_filtrado_mes[df_filtrado_mes[col_tipo] == "SAÍDA"],
+                values="Valor",
+                names="Categoria",
+                hole=0.4,
+                color_discrete_sequence=px.colors.qualitative.T10
+            )
+            st.plotly_chart(fig_pizza, use_container_width=True)
+
+        with c2:
+            st.subheader(f"Entradas vs Saídas ({mes_selecionado})")
+            df_bar_resumo = df_mes.groupby(col_tipo)["Valor"].sum().reset_index()
+            fig_bar = px.bar(
+                df_bar_resumo,
+                x=col_tipo,
+                y="Valor",
+                color=col_tipo,
+                color_discrete_map={"ENTRADA": "#2ecc71", "SAÍDA": "#e74c3c"}
+            )
+            fig_bar.update_layout(showlegend=False, xaxis_title="")
+            st.plotly_chart(fig_bar, use_container_width=True)
+
+        with st.expander("🔍 Visualizar lista de lançamentos deste mês"):
+            st.dataframe(df_filtrado_mes.sort_values("Data", ascending=False), use_container_width=True)
+
+except Exception as e:
+    st.error(f"Erro ao processar dados: {e}")
