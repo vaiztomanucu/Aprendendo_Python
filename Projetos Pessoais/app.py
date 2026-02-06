@@ -31,14 +31,14 @@ def load_data():
     df = pd.DataFrame(data)
 
     if 'Valor' in df.columns:
-        # LÓGICA DE LIMPEZA REVISADA: Preserva o sinal negativo (-)
+        # Limpeza mantendo o sinal negativo para que o Python entenda a matemática
         df['Valor'] = (
             df['Valor']
             .astype(str)
             .str.replace('R$', '', regex=False)
             .str.replace(' ', '', regex=False)
-            .str.replace('.', '', regex=False)  # Remove separador de milhar
-            .str.replace(',', '.', regex=False)  # Converte vírgula decimal em ponto
+            .str.replace('.', '', regex=False)
+            .str.replace(',', '.', regex=False)
             .str.strip()
         )
         df['Valor'] = pd.to_numeric(df['Valor'], errors='coerce').fillna(0)
@@ -55,12 +55,11 @@ def load_data():
 # --- INTERFACE DO DASHBOARD ---
 try:
     df = load_data()
-    col_tipo = "Tipo (Entrada/Saída)"
 
     if df.empty:
         st.warning("Aguardando dados válidos na planilha.")
     else:
-        st.title("📊 Meu Dashboard Financeiro")
+        st.title("📊 Meu Dashboard Financeiro (Lógica de Sinais)")
 
         # --- SIDEBAR (FILTROS) ---
         st.sidebar.header("Configurações de Filtro")
@@ -75,58 +74,74 @@ try:
         lista_cat = sorted([c for c in df["Categoria"].unique().tolist() if c])
         cat_escolhidas = st.sidebar.multiselect("Filtrar Categorias", lista_cat, default=lista_cat)
 
-        # --- PREPARAÇÃO DOS DADOS ---
+        # --- PREPARAÇÃO DOS DADOS BASEADA EM SINAIS ---
         df_mes = df[df['Mes_Ano'] == mes_selecionado]
-        df_filtrado_mes = df_mes[df_mes["Categoria"].isin(cat_escolhidas)]
+
+        # Define o que é Entrada e Saída puramente pelo sinal do Valor
+        # Entradas: > 0 | Saídas: < 0
+        df_mes_entradas = df_mes[df_mes['Valor'] > 0]
+        df_mes_saidas = df_mes[df_mes['Valor'] < 0]
 
         if ver_tudo:
             df_para_evolucao = df[df["Categoria"].isin(cat_escolhidas)]
             df_para_investimentos = df
             texto_periodo = "Histórico Total"
         else:
-            df_para_evolucao = df_filtrado_mes
+            df_para_evolucao = df_mes[df_mes["Categoria"].isin(cat_escolhidas)]
             df_para_investimentos = df_mes
             texto_periodo = mes_visual
 
         # --- MÉTRICAS DO MÊS ---
-        entradas = df_mes[df_mes[col_tipo] == "ENTRADA"]["Valor"].sum()
-        saidas = df_mes[df_mes[col_tipo] == "SAÍDA"]["Valor"].sum()
-        saldo = entradas - saidas
+        entradas_total = df_mes_entradas['Valor'].sum()
+        saidas_total = df_mes_saidas['Valor'].sum()  # Isso será um número negativo
+        saldo_mensal = entradas_total + saidas_total  # Matemática direta: 1000 + (-200) = 800
 
         m1, m2, m3 = st.columns(3)
-        m1.metric(f"Entradas ({mes_visual})", f"R$ {entradas:,.2f}")
-        m2.metric(f"Saídas ({mes_visual})", f"R$ {saidas:,.2f}")
-        m3.metric("Saldo Mensal", f"R$ {saldo:,.2f}", delta=f"{saldo:,.2f}")
+        m1.metric(f"Entradas (+)", f"R$ {entradas_total:,.2f}")
+        # Exibimos a saída como positivo no rótulo apenas para estética, mas o cálculo é negativo
+        m2.metric(f"Saídas (-)", f"R$ {abs(saidas_total):,.2f}")
+        m3.metric("Saldo Líquido", f"R$ {saldo_mensal:,.2f}", delta=f"{saldo_mensal:,.2f}")
 
         st.divider()
 
-        # --- GRÁFICO 1: EVOLUÇÃO GERAL ---
+        # --- GRÁFICO 1: EVOLUÇÃO FINANCEIRA ---
         st.subheader("📈 Evolução Financeira Detalhada")
-        df_plot = df_para_evolucao.groupby(['Data', col_tipo, 'Categoria'])['Valor'].sum().reset_index()
-        fig_evolucao = px.line(df_plot, x='Data', y='Valor', color=col_tipo, markers=True,
+
+        # Criamos uma coluna temporária no gráfico para colorir por sinal
+        df_para_evolucao = df_para_evolucao.copy()
+        df_para_evolucao['Status'] = df_para_evolucao['Valor'].apply(lambda x: 'ENTRADA' if x > 0 else 'SAÍDA')
+
+        df_plot = df_para_evolucao.groupby(['Data', 'Status', 'Categoria'])['Valor'].sum().reset_index()
+        # Para o gráfico de linha, usamos o valor absoluto (abs) para a posição, mas a cor indica o tipo
+        df_plot['Valor_Grafico'] = df_plot['Valor'].abs()
+
+        fig_evolucao = px.line(df_plot, x='Data', y='Valor_Grafico', color='Status', markers=True,
                                color_discrete_map={"ENTRADA": "#2ecc71", "SAÍDA": "#e74c3c"},
-                               template="plotly_dark", custom_data=['Categoria'])
+                               template="plotly_dark", custom_data=['Categoria', 'Valor'])
 
         fig_evolucao.update_traces(
-            hovertemplate="<b>Data:</b> %{x|%d/%m/%y}<br><b>Valor:</b> R$ %{y:,.2f}<br><b>Categoria:</b> %{customdata[0]}<extra></extra>")
+            hovertemplate="<b>Data:</b> %{x|%d/%m/%y}<br><b>Valor Real:</b> R$ %{customdata[1]:,.2f}<br><b>Categoria:</b> %{customdata[0]}<extra></extra>")
         fig_evolucao.update_layout(hovermode="closest",
                                    legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1))
-        fig_evolucao.update_xaxes(tickformat="%d/%m/%y", tickangle=45, nticks=10)
         st.plotly_chart(fig_evolucao, use_container_width=True)
 
         # --- GRÁFICOS INFERIORES ---
         c1, c2 = st.columns(2)
         with c1:
-            st.subheader(f"Gastos por Categoria ({mes_visual})")
-            df_pizza = df_filtrado_mes[df_filtrado_mes[col_tipo] == "SAÍDA"]
+            st.subheader(f"Distribuição de Gastos (-)")
+            df_pizza = df_mes_saidas.copy()
+            df_pizza['Valor'] = df_pizza['Valor'].abs()  # Pizza precisa de valores positivos
             if not df_pizza.empty:
                 fig_pizza = px.pie(df_pizza, values="Valor", names="Categoria", hole=0.4)
                 st.plotly_chart(fig_pizza, use_container_width=True)
         with c2:
-            st.subheader(f"Entradas vs Saídas ({mes_visual})")
-            df_bar_resumo = df_mes.groupby(col_tipo)["Valor"].sum().reset_index()
-            fig_bar = px.bar(df_bar_resumo, x=col_tipo, y="Valor", color=col_tipo,
-                             color_discrete_map={"ENTRADA": "#2ecc71", "SAÍDA": "#e74c3c"})
+            st.subheader(f"Balanço Mensal")
+            df_balanco = pd.DataFrame({
+                'Tipo': ['Entradas', 'Saídas'],
+                'Total': [entradas_total, abs(saidas_total)]
+            })
+            fig_bar = px.bar(df_balanco, x='Tipo', y='Total', color='Tipo',
+                             color_discrete_map={"Entradas": "#2ecc71", "Saídas": "#e74c3c"})
             st.plotly_chart(fig_bar, use_container_width=True)
 
         # --- SEÇÃO: EVOLUÇÃO DE INVESTIMENTOS ---
@@ -137,33 +152,23 @@ try:
             df_para_investimentos["Categoria"].str.contains("Investimento", case=False, na=False)]
 
         if not df_invest.empty:
-            # Agrupamos por data para garantir que retiradas no mesmo dia sejam somadas/subtraídas
             df_invest_plot = df_invest.groupby(['Data', 'Categoria'])['Valor'].sum().reset_index()
 
             fig_invest = px.line(
-                df_invest_plot,
-                x='Data',
-                y='Valor',
-                color='Categoria',
-                markers=True,
-                template="plotly_dark",
-                color_discrete_sequence=px.colors.sequential.Greens_r
+                df_invest_plot, x='Data', y='Valor', color='Categoria', markers=True,
+                template="plotly_dark", color_discrete_sequence=px.colors.sequential.Greens_r
             )
-
             fig_invest.update_traces(
-                hovertemplate="<b>Data:</b> %{x|%d/%m/%y}<br><b>Valor:</b> R$ %{y:,.2f}<extra></extra>")
-            fig_invest.update_layout(hovermode="closest", xaxis_title="", yaxis_title="Valor (R$)",
-                                     legend_title_text='')
-            fig_invest.update_xaxes(tickformat="%d/%m/%y", tickangle=45, nticks=10)
+                hovertemplate="<b>Data:</b> %{x|%d/%m/%y}<br><b>Movimentação:</b> R$ %{y:,.2f}<extra></extra>")
             st.plotly_chart(fig_invest, use_container_width=True)
 
             total_inv_periodo = df_invest["Valor"].sum()
-            st.info(f"💸 O valor líquido investido em {texto_periodo} foi de **R$ {total_inv_periodo:,.2f}**")
+            st.info(f"💸 Saldo de movimentações em investimentos em {texto_periodo}: **R$ {total_inv_periodo:,.2f}**")
         else:
-            st.info(f"Nenhum registro de 'Investimento' encontrado para {texto_periodo}.")
+            st.info(f"Nenhum registro de 'Investimento' encontrado.")
 
         with st.expander(f"🔍 Lista de lançamentos - {mes_visual}"):
-            st.dataframe(df_filtrado_mes.sort_values("Data", ascending=False), use_container_width=True)
+            st.dataframe(df_mes.sort_values("Data", ascending=False), use_container_width=True)
 
 except Exception as e:
-    st.error(f"Erro ao processar dados: {e}")
+    st.error(f"Erro crítico no processamento: {e}")
