@@ -199,13 +199,12 @@ try:
             fig_bar.update_traces(hovertemplate="<b>Status:</b> %{x}<br><b>Total:</b> R$ %{y:,.2f}<extra></extra>")
             st.plotly_chart(fig_bar, use_container_width=True)
 
-        # --- NOVO GRÁFICO: RECORRÊNCIA DOS GASTOS (SOMENTE SAÍDAS) ---
+        # --- NOVO GRÁFICO: RECORRÊNCIA DOS GASTOS (ORDEM AJUSTADA) ---
         st.subheader("🔄 Recorrência dos Gastos")
         if not df_mes_saidas.empty:
             df_rec = df_mes_saidas.copy()
             df_rec['Valor_Abs'] = df_rec['Valor'].abs()
 
-            # Filtragem estrita para remover "Receitas" da análise de recorrência de gastos
             df_rec_plot = df_rec[df_rec['Recorrência'] != 'Receitas'].groupby("Recorrência")[
                 "Valor_Abs"].sum().reset_index()
 
@@ -215,11 +214,12 @@ try:
                 y="Valor_Abs",
                 color="Recorrência",
                 template="plotly_dark",
-                # CORES ATUALIZADAS: Tons pastéis tranquilos
+                # DEFINIÇÃO DA ORDEM: Fixos -> Recorrentes -> Não Recorrentes
+                category_orders={"Recorrência": ["Fixos", "Recorrentes", "Não Recorrentes"]},
                 color_discrete_map={
-                    "Não Recorrentes": "#E57373",  # Vermelho suave
-                    "Recorrentes": "#FFF176",      # Amarelo palha
-                    "Fixos": "#64B5F6"             # Azul tranquilo
+                    "Não Recorrentes": "#E57373",
+                    "Recorrentes": "#FFF176",
+                    "Fixos": "#64B5F6"
                 },
                 labels={"Valor_Abs": "Total (R$)"}
             )
@@ -244,11 +244,9 @@ try:
             linha_total = pd.DataFrame({"Categoria": ["TOTAL"], "Valor": [total_gastos]})
             resumo_final = pd.concat([resumo_cat, linha_total], ignore_index=True)
 
-
             def highlight_total(row):
                 return ['background-color: #990000; color: white; font-weight: bold' if row.Categoria == 'TOTAL' else ''
                         for _ in row]
-
 
             resumo_styled = (
                 resumo_final.style
@@ -278,11 +276,9 @@ try:
             df_lista['Data'] = df_lista['Data'].dt.strftime('%d/%m/%Y')
             df_lista = df_lista.sort_values("Data", ascending=False)
 
-
             def color_valor(val):
                 color = '#2ecc71' if val > 0 else '#e74c3c'
                 return f'color: {color}; font-weight: bold'
-
 
             lista_styled = (
                 df_lista.style
