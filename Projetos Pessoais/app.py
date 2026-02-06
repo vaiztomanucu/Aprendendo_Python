@@ -58,7 +58,6 @@ try:
     if df.empty:
         st.warning("Aguardando dados válidos na planilha.")
     else:
-        # Removido "(Lógica de Sinais)" do título
         st.title("📊 Meu Dashboard Financeiro")
 
         # --- SIDEBAR (FILTROS) ---
@@ -95,7 +94,6 @@ try:
         saldo_mensal = entradas_total + saidas_total
 
         m1, m2, m3 = st.columns(3)
-        # Removido (+) e (-) dos nomes das métricas
         m1.metric("Entradas", f"R$ {entradas_total:,.2f}")
         m2.metric("Saídas", f"R$ {abs(saidas_total):,.2f}")
         m3.metric("Saldo Líquido", f"R$ {saldo_mensal:,.2f}", delta=f"{saldo_mensal:,.2f}")
@@ -113,18 +111,24 @@ try:
 
         fig_evolucao = px.line(df_plot, x='Data', y='Valor_Grafico', color='Status', markers=True,
                                color_discrete_map={"ENTRADA": "#2ecc71", "SAÍDA": "#e74c3c"},
-                               template="plotly_dark", custom_data=['Categoria', 'Valor'])
+                               template="plotly_dark", custom_data=['Categoria', 'Valor'],
+                               labels={"Valor_Grafico": "Valor (R$)", "Data": "Data"})  # Renomeia os eixos
+
+        # Ajuste fino dos eixos (Formatação Brasil e Títulos)
+        fig_evolucao.update_xaxes(tickformat="%d/%m/%Y")  # Formato de data brasileiro
+        fig_evolucao.update_layout(
+            hovermode="closest",
+            legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
+        )
 
         fig_evolucao.update_traces(
-            hovertemplate="<b>Data:</b> %{x|%d/%m/%y}<br><b>Valor Real:</b> R$ %{customdata[1]:,.2f}<br><b>Categoria:</b> %{customdata[0]}<extra></extra>")
-        fig_evolucao.update_layout(hovermode="closest",
-                                   legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1))
+            hovertemplate="<b>Data:</b> %{x|%d/%m/%Y}<br><b>Valor Real:</b> R$ %{customdata[1]:,.2f}<br><b>Categoria:</b> %{customdata[0]}<extra></extra>")
+
         st.plotly_chart(fig_evolucao, use_container_width=True)
 
         # --- GRÁFICOS INFERIORES ---
         c1, c2 = st.columns(2)
         with c1:
-            # Removido (-) do título da distribuição
             st.subheader("Distribuição de Gastos")
             df_pizza = df_mes_saidas.copy()
             df_pizza['Valor'] = df_pizza['Valor'].abs()
@@ -153,10 +157,12 @@ try:
 
             fig_invest = px.line(
                 df_invest_plot, x='Data', y='Valor', color='Categoria', markers=True,
-                template="plotly_dark", color_discrete_sequence=px.colors.sequential.Greens_r
+                template="plotly_dark", color_discrete_sequence=px.colors.sequential.Greens_r,
+                labels={"Valor": "Valor (R$)", "Data": "Data"}
             )
+            fig_invest.update_xaxes(tickformat="%d/%m/%Y")
             fig_invest.update_traces(
-                hovertemplate="<b>Data:</b> %{x|%d/%m/%y}<br><b>Movimentação:</b> R$ %{y:,.2f}<extra></extra>")
+                hovertemplate="<b>Data:</b> %{x|%d/%m/%Y}<br><b>Movimentação:</b> R$ %{y:,.2f}<extra></extra>")
             st.plotly_chart(fig_invest, use_container_width=True)
 
             total_inv_periodo = df_invest["Valor"].sum()
