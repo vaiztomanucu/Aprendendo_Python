@@ -123,7 +123,10 @@ try:
             hovertemplate="<b>Data:</b> %{x|%d/%m/%Y}<br><b>Valor Real:</b> R$ %{customdata[1]:,.2f}<br><b>Categoria:</b> %{customdata[0]}<extra></extra>")
         st.plotly_chart(fig_evolucao, use_container_width=True)
 
-        # --- GRÁFICOS INFERIORES ---
+        # --- SEÇÃO: ANÁLISES MENSAIS ---
+        st.divider()
+        st.header("🎯 Análises Mensais")  # Título geral para os dois gráficos abaixo
+
         c1, c2 = st.columns(2)
         with c1:
             st.subheader("Distribuição de Gastos")
@@ -135,7 +138,7 @@ try:
                     hovertemplate="<b>Categoria:</b> %{label}<br><b>Valor:</b> R$ %{value:,.2f}<br><b>Percentual:</b> %{percent}<extra></extra>")
                 st.plotly_chart(fig_pizza, use_container_width=True)
         with c2:
-            st.subheader("Balanço Mensal")
+            st.subheader("Balanço")  # Nome simplificado (removido "Mensal")
             df_balanco = pd.DataFrame({
                 'Status': ['Entradas', 'Saídas'],
                 'Total': [entradas_total, abs(saidas_total)]
@@ -143,7 +146,6 @@ try:
             fig_bar = px.bar(df_balanco, x='Status', y='Total', color='Status',
                              color_discrete_map={"Entradas": "#2ecc71", "Saídas": "#e74c3c"},
                              labels={"Total": "Valor (R$)"})
-            # Ajuste da caixa de informações do gráfico de barras
             fig_bar.update_traces(hovertemplate="<b>Status:</b> %{x}<br><b>Total:</b> R$ %{y:,.2f}<extra></extra>")
             st.plotly_chart(fig_bar, use_container_width=True)
 
