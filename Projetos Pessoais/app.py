@@ -43,7 +43,7 @@ def load_data():
 
     if 'Data' in df.columns:
         df['Data'] = pd.to_datetime(df['Data'], dayfirst=True, errors='coerce')
-        df = df.dropna(subset=['Data']).sort_values('Data')  # Ordenação importante para a linha
+        df = df.dropna(subset=['Data']).sort_values('Data')  # Ordenação para linha contínua
         df['Mes_Ano'] = df['Data'].dt.strftime('%Y-%m')
 
     return df
@@ -52,14 +52,13 @@ def load_data():
 # --- INTERFACE DO DASHBOARD ---
 try:
     df = load_data()
-    col_tipo = "Tipo (Entrada/Saída)"
 
     if df.empty:
         st.warning("Aguardando dados válidos na planilha.")
     else:
         st.title("📊 Meu Dashboard Financeiro")
 
-        # --- SIDEBAR (FILTROS PRESERVADOS) ---
+        # --- SIDEBAR (FILTROS) ---
         st.sidebar.header("Configurações de Filtro")
         lista_meses = sorted(df['Mes_Ano'].unique().tolist(), reverse=True)
         mes_selecionado = st.sidebar.selectbox("Mês de análise detalhada", lista_meses)
@@ -71,6 +70,7 @@ try:
         df_filtrado = df_mes[df_mes["Categoria"].isin(cat_escolhidas)]
 
         # --- MÉTRICAS DO MÊS ---
+        col_tipo = "Tipo (Entrada/Saída)"
         entradas = df_mes[df_mes[col_tipo] == "ENTRADA"]["Valor"].sum()
         saidas = df_mes[df_mes[col_tipo] == "SAÍDA"]["Valor"].sum()
         saldo = entradas - saidas
@@ -82,29 +82,31 @@ try:
 
         st.divider()
 
-        # --- GRÁFICO 1: EVOLUÇÃO (AJUSTADO) ---
+        # --- GRÁFICO 1: EVOLUÇÃO (ESCRITA E EIXO X CORRIGIDOS) ---
         st.subheader("📈 Evolução Financeira Detalhada")
 
-        # Usamos o df_filtrado para que o gráfico responda aos filtros da sidebar
+        # Mantendo o agrupamento original do seu código para não quebrar nada
+        df_evolucao_real = df.groupby(['Data', col_tipo, 'Categoria'])['Valor'].sum().reset_index()
+
         fig_evolucao = px.line(
-            df_filtrado,
+            df_evolucao_real,
             x='Data',
             y='Valor',
             color=col_tipo,
             markers=True,
             color_discrete_map={"ENTRADA": "#2ecc71", "SAÍDA": "#e74c3c"},
             template="plotly_dark",
-            custom_data=['Categoria']  # Para usar no hover limpo
+            custom_data=['Categoria']  # Passamos a categoria para o hover limpo
         )
 
-        # 1. Ajuste da escrita do Hover (Limpa sinais de = e nomes brutos)
+        # AJUSTE 1: Escrita Limpa (Removendo sinais de "=")
         fig_evolucao.update_traces(
             hovertemplate="<b>Data:</b> %{x|%d/%m/%y}<br>" +
                           "<b>Valor:</b> R$ %{y:,.2f}<br>" +
                           "<b>Categoria:</b> %{customdata[0]}<extra></extra>"
         )
 
-        # 2. Ajuste do Eixo X (Datas legíveis e inclinadas para evitar o borrão)
+        # AJUSTE 2: Eixo X sem borrão (Inclinação de 45 graus)
         fig_evolucao.update_layout(
             hovermode="closest",
             legend_title_text='',
@@ -115,8 +117,8 @@ try:
 
         fig_evolucao.update_xaxes(
             tickformat="%d/%m/%y",
-            dtick="D1",  # Força um tique por dia
-            tickangle=45  # Inclina as datas para não ficarem sobrepostas
+            dtick="D1",
+            tickangle=45  # Inclina as datas para ficarem legíveis
         )
 
         st.plotly_chart(fig_evolucao, use_container_width=True)
@@ -125,7 +127,7 @@ try:
         c1, c2 = st.columns(2)
 
         with c1:
-            st.subheader(f"Gastos por Categoria")
+            st.subheader(f"Gastos por Categoria ({mes_selecionado})")
             fig_pizza = px.pie(
                 df_filtrado[df_filtrado[col_tipo] == "SAÍDA"],
                 values="Valor",
@@ -136,7 +138,7 @@ try:
             st.plotly_chart(fig_pizza, use_container_width=True)
 
         with c2:
-            st.subheader(f"Entradas vs Saídas")
+            st.subheader(f"Entradas vs Saídas ({mes_selecionado})")
             fig_bar = px.bar(
                 df_mes.groupby(col_tipo)["Valor"].sum().reset_index(),
                 x=col_tipo,
