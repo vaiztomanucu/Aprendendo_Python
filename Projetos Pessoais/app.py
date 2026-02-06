@@ -168,6 +168,30 @@ try:
             fig_bar.update_traces(hovertemplate="<b>Status:</b> %{x}<br><b>Total:</b> R$ %{y:,.2f}<extra></extra>")
             st.plotly_chart(fig_bar, use_container_width=True)
 
+            # --- NOVO RESUMO POR CATEGORIA ---
+            st.markdown("### 📋 Resumo de Gastos por Categoria")
+
+            if not df_mes_saidas.empty:
+                # Agrupa, soma os valores (em módulo) e ordena do maior para o menor
+                resumo_cat = (
+                    df_mes_saidas.groupby("Categoria")["Valor"]
+                    .sum()
+                    .abs()
+                    .reset_index()
+                    .sort_values(by="Valor", ascending=False)
+                )
+
+                # Formatação para exibição monetária brasileira
+                resumo_cat["Valor"] = resumo_cat["Valor"].apply(lambda x: f"R$ {x:,.2f}")
+
+                # Exibe a tabela centralizada ou em colunas se preferir
+                st.table(resumo_cat.set_index("Categoria"))
+            else:
+                st.info("Sem gastos registrados para gerar o resumo neste mês.")
+
+            # --- (Segue o código do expander da lista de lançamentos) ---
+            with st.expander(f"🔍 Lista de lançamentos - {mes_visual}"):
+
         with st.expander(f"🔍 Lista de lançamentos - {mes_visual}"):
             st.dataframe(df_mes.sort_values("Data", ascending=False), use_container_width=True)
 
