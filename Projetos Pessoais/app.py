@@ -31,12 +31,14 @@ def load_data():
     df = pd.DataFrame(data)
 
     if 'Valor' in df.columns:
+        # LÓGICA DE LIMPEZA REVISADA: Preserva o sinal negativo (-)
         df['Valor'] = (
             df['Valor']
             .astype(str)
             .str.replace('R$', '', regex=False)
-            .str.replace('.', '', regex=False)
-            .str.replace(',', '.', regex=False)
+            .str.replace(' ', '', regex=False)
+            .str.replace('.', '', regex=False)  # Remove separador de milhar
+            .str.replace(',', '.', regex=False)  # Converte vírgula decimal em ponto
             .str.strip()
         )
         df['Valor'] = pd.to_numeric(df['Valor'], errors='coerce').fillna(0)
@@ -64,6 +66,7 @@ try:
         st.sidebar.header("Configurações de Filtro")
         df_meses = df[['Mes_Ano_Exibicao', 'Mes_Ano']].drop_duplicates().sort_values('Mes_Ano', ascending=False)
         lista_exibicao = df_meses['Mes_Ano_Exibicao'].tolist()
+
         mes_visual = st.sidebar.selectbox("Mês de análise detalhada", lista_exibicao)
         mes_selecionado = df_meses.loc[df_meses['Mes_Ano_Exibicao'] == mes_visual, 'Mes_Ano'].values[0]
 
@@ -126,7 +129,7 @@ try:
                              color_discrete_map={"ENTRADA": "#2ecc71", "SAÍDA": "#e74c3c"})
             st.plotly_chart(fig_bar, use_container_width=True)
 
-        # --- SEÇÃO: EVOLUÇÃO DE INVESTIMENTOS (VERDE E DINHEIRO) ---
+        # --- SEÇÃO: EVOLUÇÃO DE INVESTIMENTOS ---
         st.divider()
         st.subheader(f"💰 Evolução de Investimentos ({texto_periodo})")
 
@@ -134,6 +137,7 @@ try:
             df_para_investimentos["Categoria"].str.contains("Investimento", case=False, na=False)]
 
         if not df_invest.empty:
+            # Agrupamos por data para garantir que retiradas no mesmo dia sejam somadas/subtraídas
             df_invest_plot = df_invest.groupby(['Data', 'Categoria'])['Valor'].sum().reset_index()
 
             fig_invest = px.line(
@@ -143,28 +147,18 @@ try:
                 color='Categoria',
                 markers=True,
                 template="plotly_dark",
-                # Define uma paleta de cores verdes (Greens_r para um tom mais vivo)
                 color_discrete_sequence=px.colors.sequential.Greens_r
             )
 
             fig_invest.update_traces(
-                hovertemplate="<b>Data:</b> %{x|%d/%m/%y}<br>" +
-                              "<b>Valor:</b> R$ %{y:,.2f}<extra></extra>"
-            )
-
-            fig_invest.update_layout(
-                hovermode="closest",
-                xaxis_title="",
-                yaxis_title="Valor (R$)",
-                showlegend=True,
-                legend_title_text=''
-            )
-
+                hovertemplate="<b>Data:</b> %{x|%d/%m/%y}<br><b>Valor:</b> R$ %{y:,.2f}<extra></extra>")
+            fig_invest.update_layout(hovermode="closest", xaxis_title="", yaxis_title="Valor (R$)",
+                                     legend_title_text='')
             fig_invest.update_xaxes(tickformat="%d/%m/%y", tickangle=45, nticks=10)
             st.plotly_chart(fig_invest, use_container_width=True)
 
             total_inv_periodo = df_invest["Valor"].sum()
-            st.info(f"💸 O valor total investido em {texto_periodo} foi de **R$ {total_inv_periodo:,.2f}**")
+            st.info(f"💸 O valor líquido investido em {texto_periodo} foi de **R$ {total_inv_periodo:,.2f}**")
         else:
             st.info(f"Nenhum registro de 'Investimento' encontrado para {texto_periodo}.")
 
