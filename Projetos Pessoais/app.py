@@ -44,10 +44,7 @@ def load_data():
     if 'Data' in df.columns:
         df['Data'] = pd.to_datetime(df['Data'], dayfirst=True, errors='coerce')
         df = df.dropna(subset=['Data']).sort_values('Data')
-
-        # Lógica: Ano-Mês para filtro e ordenação
         df['Mes_Ano'] = df['Data'].dt.strftime('%Y-%m')
-        # Exibição: Mês/Ano para o usuário (Ex: 03/2026)
         df['Mes_Ano_Exibicao'] = df['Data'].dt.strftime('%m/%Y')
 
     return df
@@ -65,20 +62,13 @@ try:
 
         # --- SIDEBAR (FILTROS) ---
         st.sidebar.header("Configurações de Filtro")
-
-        # Mapeamento de Meses para o Selectbox
         df_meses = df[['Mes_Ano_Exibicao', 'Mes_Ano']].drop_duplicates().sort_values('Mes_Ano', ascending=False)
         lista_exibicao = df_meses['Mes_Ano_Exibicao'].tolist()
-
         mes_visual = st.sidebar.selectbox("Mês de análise detalhada", lista_exibicao)
-
-        # Recupera o valor lógico (2026-03) com base na escolha visual (03/2026)
         mes_selecionado = df_meses.loc[df_meses['Mes_Ano_Exibicao'] == mes_visual, 'Mes_Ano'].values[0]
 
-        # Checkbox para histórico
         ver_tudo = st.sidebar.checkbox("Visualizar todo o histórico no gráfico", value=False)
 
-        # Filtro de Categorias
         lista_cat = sorted([c for c in df["Categoria"].unique().tolist() if c])
         cat_escolhidas = st.sidebar.multiselect("Filtrar Categorias", lista_cat, default=lista_cat)
 
@@ -103,66 +93,68 @@ try:
 
         st.divider()
 
-        # --- GRÁFICO 1: EVOLUÇÃO FINANCEIRA ---
+        # --- GRÁFICO 1: EVOLUÇÃO ---
         st.subheader("📈 Evolução Financeira Detalhada")
-
         df_plot = df_para_evolucao.groupby(['Data', col_tipo, 'Categoria'])['Valor'].sum().reset_index()
-
-        fig_evolucao = px.line(
-            df_plot,
-            x='Data',
-            y='Valor',
-            color=col_tipo,
-            markers=True,
-            color_discrete_map={"ENTRADA": "#2ecc71", "SAÍDA": "#e74c3c"},
-            template="plotly_dark",
-            custom_data=['Categoria']
-        )
+        fig_evolucao = px.line(df_plot, x='Data', y='Valor', color=col_tipo, markers=True,
+                               color_discrete_map={"ENTRADA": "#2ecc71", "SAÍDA": "#e74c3c"},
+                               template="plotly_dark", custom_data=['Categoria'])
 
         fig_evolucao.update_traces(
-            hovertemplate="<b>Data:</b> %{x|%d/%m/%y}<br>" +
-                          "<b>Valor:</b> R$ %{y:,.2f}<br>" +
-                          "<b>Categoria:</b> %{customdata[0]}<extra></extra>"
-        )
-
-        fig_evolucao.update_layout(
-            hovermode="closest",
-            legend_title_text='',
-            xaxis_title="",
-            yaxis_title="Valor (R$)",
-            legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
-        )
-
-        fig_evolucao.update_xaxes(
-            tickformat="%d/%m/%y",
-            tickangle=45,
-            nticks=10,
-            showgrid=True,
-            gridcolor='rgba(255, 255, 255, 0.1)'
-        )
-
+            hovertemplate="<b>Data:</b> %{x|%d/%m/%y}<br><b>Valor:</b> R$ %{y:,.2f}<br><b>Categoria:</b> %{customdata[0]}<extra></extra>")
+        fig_evolucao.update_layout(hovermode="closest",
+                                   legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1))
+        fig_evolucao.update_xaxes(tickformat="%d/%m/%y", tickangle=45, nticks=10)
         st.plotly_chart(fig_evolucao, use_container_width=True)
 
         # --- GRÁFICOS INFERIORES ---
         c1, c2 = st.columns(2)
-
         with c1:
             st.subheader(f"Gastos por Categoria ({mes_visual})")
             df_pizza = df_filtrado_mes[df_filtrado_mes[col_tipo] == "SAÍDA"]
             if not df_pizza.empty:
-                fig_pizza = px.pie(df_pizza, values="Valor", names="Categoria", hole=0.4,
-                                   color_discrete_sequence=px.colors.qualitative.T10)
+                fig_pizza = px.pie(df_pizza, values="Valor", names="Categoria", hole=0.4)
                 st.plotly_chart(fig_pizza, use_container_width=True)
-            else:
-                st.info("Sem saídas registradas neste mês.")
-
         with c2:
             st.subheader(f"Entradas vs Saídas ({mes_visual})")
             df_bar_resumo = df_mes.groupby(col_tipo)["Valor"].sum().reset_index()
             fig_bar = px.bar(df_bar_resumo, x=col_tipo, y="Valor", color=col_tipo,
                              color_discrete_map={"ENTRADA": "#2ecc71", "SAÍDA": "#e74c3c"})
-            fig_bar.update_layout(showlegend=False, xaxis_title="")
             st.plotly_chart(fig_bar, use_container_width=True)
+
+        # --- NOVA SEÇÃO: FOCO EM INVESTIMENTOS E PENSÃO ---
+        st.divider()
+        st.subheader("💰 Análise de Investimentos e Receitas Especiais")
+
+        # Filtramos apenas as categorias desejadas (Pensão e Investimento)
+        # Nota: O código procura o termo "Investimento" e "Pensão" no texto da categoria
+        df_especial = df_mes[df_mes["Categoria"].str.contains("Investimento|Pensão", case=False, na=False)]
+
+        if not df_especial.empty:
+            total_investido = df_especial[df_especial["Categoria"].str.contains("Investimento", case=False)][
+                "Valor"].sum()
+            total_pensao = df_especial[df_especial["Categoria"].str.contains("Pensão", case=False)]["Valor"].sum()
+
+            # Métricas específicas
+            i1, i2 = st.columns(2)
+            i1.metric("Total Investido no Mês", f"R$ {total_investido:,.2f}")
+            i2.metric("Total Pensão Recebida", f"R$ {total_pensao:,.2f}")
+
+            # Gráfico de comparação (Barra)
+            df_especial_agrupado = df_especial.groupby("Categoria")["Valor"].sum().reset_index()
+            fig_especial = px.bar(
+                df_especial_agrupado,
+                x="Categoria",
+                y="Valor",
+                color="Categoria",
+                text_auto='.2s',
+                title=f"Distribuição: Investimento vs Pensão ({mes_visual})",
+                template="plotly_dark",
+                color_discrete_sequence=px.colors.qualitative.Pastel
+            )
+            st.plotly_chart(fig_especial, use_container_width=True)
+        else:
+            st.info("Nenhum registro de 'Investimento' ou 'Pensão' encontrado para este mês.")
 
         with st.expander(f"🔍 Lista de lançamentos - {mes_visual}"):
             st.dataframe(df_filtrado_mes.sort_values("Data", ascending=False), use_container_width=True)
