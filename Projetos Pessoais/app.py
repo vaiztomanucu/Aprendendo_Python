@@ -24,7 +24,7 @@ def load_data():
             creds = Credentials.from_service_account_file("credentials.json", scopes=scope)
 
     client = gspread.authorize(creds)
-    spreadsheet = client.open("Controle Financeiro Mensal with Gráficos")
+    spreadsheet = client.open("Controle Financeiro Mensal com Gráficos")
     sheet = spreadsheet.worksheet("Controle de Gastos")
 
     data = sheet.get_all_records()
@@ -42,9 +42,12 @@ def load_data():
         df['Valor'] = pd.to_numeric(df['Valor'], errors='coerce').fillna(0)
 
     if 'Data' in df.columns:
+        # Garante que a data seja interpretada corretamente
         df['Data'] = pd.to_datetime(df['Data'], dayfirst=True, errors='coerce')
         df = df.dropna(subset=['Data'])
         df['Mes_Ano'] = df['Data'].dt.strftime('%Y-%m')
+        # Ordena por data para a linha do gráfico não fazer "zigue-zague"
+        df = df.sort_values('Data')
 
     return df
 
@@ -54,7 +57,7 @@ try:
     df = load_data()
 
     if df.empty:
-        st.warning("Nenhum dado encontrado.")
+        st.warning("Nenhum dado encontrado na planilha.")
     else:
         st.title("📊 Meu Dashboard Financeiro")
 
@@ -82,30 +85,28 @@ try:
 
         st.divider()
 
-        # --- GRÁFICO 1: EVOLUÇÃO (VERSÃO FINAL SEM SUMIÇO DE LINHAS) ---
+        # --- GRÁFICO 1: EVOLUÇÃO (FORMATO ESTÁVEL) ---
         st.subheader("📈 Evolução Financeira Detalhada")
 
-        # Estratégia: Agrupamos para a linha não quebrar, mas mantemos o detalhe no hover
-        df_evol = df_mes.copy()
-
-        # Criamos uma coluna de texto formatada para o hover que não interfere na estrutura da linha
-        df_evol['hover_text'] = df_evol.apply(lambda x: f"Valor: R$ {x['Valor']:,.2f}<br>Categoria: {x['Categoria']}",
-                                              axis=1)
+        # Agrupamos para garantir que a linha seja contínua por dia
+        # Mas mantemos a Categoria no hover através do parâmetro hover_data
+        df_evol_plot = df_mes.copy()
 
         fig_evolucao = px.line(
-            df_evol,
+            df_evol_plot,
             x='Data',
             y='Valor',
             color=col_tipo,
             markers=True,
-            # Voltamos ao padrão para a linha conectar, mas o hover fará o trabalho duro
             color_discrete_map={"ENTRADA": "#2ecc71", "SAÍDA": "#e74c3c"},
             template="plotly_dark",
-            custom_data=['hover_text']
+            # Adicionamos a Categoria aqui para o hover acessar
+            hover_data={'Data': '|%d/%m/%y', 'Valor': ':,.2f', 'Categoria': True, col_tipo: False}
         )
 
+        # Ajuste fino do Hover para ficar como você pediu (limpo e sem '=')
         fig_evolucao.update_traces(
-            hovertemplate="<b>%{customdata[0]}</b><extra></extra>"
+            hovertemplate="<b>Data:</b> %{x|%d/%m/%y}<br><b>Valor:</b> R$ %{y:,.2f}<br><b>Categoria:</b> %{customdata[0]}<extra></extra>"
         )
 
         fig_evolucao.update_layout(
