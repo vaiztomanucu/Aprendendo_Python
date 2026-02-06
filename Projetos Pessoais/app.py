@@ -44,7 +44,11 @@ def load_data():
     if 'Data' in df.columns:
         df['Data'] = pd.to_datetime(df['Data'], dayfirst=True, errors='coerce')
         df = df.dropna(subset=['Data']).sort_values('Data')
+
+        # Lógica: Ano-Mês para filtro e ordenação
         df['Mes_Ano'] = df['Data'].dt.strftime('%Y-%m')
+        # Exibição: Mês/Ano para o usuário (Ex: 03/2026)
+        df['Mes_Ano_Exibicao'] = df['Data'].dt.strftime('%m/%Y')
 
     return df
 
@@ -62,11 +66,16 @@ try:
         # --- SIDEBAR (FILTROS) ---
         st.sidebar.header("Configurações de Filtro")
 
-        # Filtro de Mês
-        lista_meses = sorted(df['Mes_Ano'].unique().tolist(), reverse=True)
-        mes_selecionado = st.sidebar.selectbox("Mês de análise detalhada", lista_meses)
+        # Mapeamento de Meses para o Selectbox
+        df_meses = df[['Mes_Ano_Exibicao', 'Mes_Ano']].drop_duplicates().sort_values('Mes_Ano', ascending=False)
+        lista_exibicao = df_meses['Mes_Ano_Exibicao'].tolist()
 
-        # Filtro de Histórico vs Mês (Para o Gráfico de Evolução)
+        mes_visual = st.sidebar.selectbox("Mês de análise detalhada", lista_exibicao)
+
+        # Recupera o valor lógico (2026-03) com base na escolha visual (03/2026)
+        mes_selecionado = df_meses.loc[df_meses['Mes_Ano_Exibicao'] == mes_visual, 'Mes_Ano'].values[0]
+
+        # Checkbox para histórico
         ver_tudo = st.sidebar.checkbox("Visualizar todo o histórico no gráfico", value=False)
 
         # Filtro de Categorias
@@ -74,11 +83,9 @@ try:
         cat_escolhidas = st.sidebar.multiselect("Filtrar Categorias", lista_cat, default=lista_cat)
 
         # --- PREPARAÇÃO DOS DADOS ---
-        # Dados do mês selecionado para métricas e pizza
         df_mes = df[df['Mes_Ano'] == mes_selecionado]
         df_filtrado_mes = df_mes[df_mes["Categoria"].isin(cat_escolhidas)]
 
-        # Lógica para o Gráfico de Evolução (Respeita o checkbox 'ver_tudo')
         if ver_tudo:
             df_para_evolucao = df[df["Categoria"].isin(cat_escolhidas)]
         else:
@@ -90,8 +97,8 @@ try:
         saldo = entradas - saidas
 
         m1, m2, m3 = st.columns(3)
-        m1.metric(f"Entradas ({mes_selecionado})", f"R$ {entradas:,.2f}")
-        m2.metric(f"Saídas ({mes_selecionado})", f"R$ {saidas:,.2f}")
+        m1.metric(f"Entradas ({mes_visual})", f"R$ {entradas:,.2f}")
+        m2.metric(f"Saídas ({mes_visual})", f"R$ {saidas:,.2f}")
         m3.metric("Saldo Mensal", f"R$ {saldo:,.2f}", delta=f"{saldo:,.2f}")
 
         st.divider()
@@ -99,7 +106,6 @@ try:
         # --- GRÁFICO 1: EVOLUÇÃO FINANCEIRA ---
         st.subheader("📈 Evolução Financeira Detalhada")
 
-        # Agrupamento para manter o gráfico organizado
         df_plot = df_para_evolucao.groupby(['Data', col_tipo, 'Categoria'])['Valor'].sum().reset_index()
 
         fig_evolucao = px.line(
@@ -113,14 +119,12 @@ try:
             custom_data=['Categoria']
         )
 
-        # Ajuste do Hover (Limpo e sem sinais de =)
         fig_evolucao.update_traces(
             hovertemplate="<b>Data:</b> %{x|%d/%m/%y}<br>" +
                           "<b>Valor:</b> R$ %{y:,.2f}<br>" +
                           "<b>Categoria:</b> %{customdata[0]}<extra></extra>"
         )
 
-        # Ajuste do Layout e Eixo X (Inclinado e com limite de tiques)
         fig_evolucao.update_layout(
             hovermode="closest",
             legend_title_text='',
@@ -132,41 +136,35 @@ try:
         fig_evolucao.update_xaxes(
             tickformat="%d/%m/%y",
             tickangle=45,
-            nticks=10,  # Evita o amontoado de datas
+            nticks=10,
             showgrid=True,
             gridcolor='rgba(255, 255, 255, 0.1)'
         )
 
         st.plotly_chart(fig_evolucao, use_container_width=True)
 
-        # --- GRÁFICOS INFERIORES (MÊS SELECIONADO) ---
+        # --- GRÁFICOS INFERIORES ---
         c1, c2 = st.columns(2)
 
         with c1:
-            st.subheader(f"Gastos por Categoria ({mes_selecionado})")
-            fig_pizza = px.pie(
-                df_filtrado_mes[df_filtrado_mes[col_tipo] == "SAÍDA"],
-                values="Valor",
-                names="Categoria",
-                hole=0.4,
-                color_discrete_sequence=px.colors.qualitative.T10
-            )
-            st.plotly_chart(fig_pizza, use_container_width=True)
+            st.subheader(f"Gastos por Categoria ({mes_visual})")
+            df_pizza = df_filtrado_mes[df_filtrado_mes[col_tipo] == "SAÍDA"]
+            if not df_pizza.empty:
+                fig_pizza = px.pie(df_pizza, values="Valor", names="Categoria", hole=0.4,
+                                   color_discrete_sequence=px.colors.qualitative.T10)
+                st.plotly_chart(fig_pizza, use_container_width=True)
+            else:
+                st.info("Sem saídas registradas neste mês.")
 
         with c2:
-            st.subheader(f"Entradas vs Saídas ({mes_selecionado})")
+            st.subheader(f"Entradas vs Saídas ({mes_visual})")
             df_bar_resumo = df_mes.groupby(col_tipo)["Valor"].sum().reset_index()
-            fig_bar = px.bar(
-                df_bar_resumo,
-                x=col_tipo,
-                y="Valor",
-                color=col_tipo,
-                color_discrete_map={"ENTRADA": "#2ecc71", "SAÍDA": "#e74c3c"}
-            )
+            fig_bar = px.bar(df_bar_resumo, x=col_tipo, y="Valor", color=col_tipo,
+                             color_discrete_map={"ENTRADA": "#2ecc71", "SAÍDA": "#e74c3c"})
             fig_bar.update_layout(showlegend=False, xaxis_title="")
             st.plotly_chart(fig_bar, use_container_width=True)
 
-        with st.expander("🔍 Visualizar lista de lançamentos deste mês"):
+        with st.expander(f"🔍 Lista de lançamentos - {mes_visual}"):
             st.dataframe(df_filtrado_mes.sort_values("Data", ascending=False), use_container_width=True)
 
 except Exception as e:
