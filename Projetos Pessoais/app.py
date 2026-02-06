@@ -126,9 +126,9 @@ try:
                              color_discrete_map={"ENTRADA": "#2ecc71", "SAÍDA": "#e74c3c"})
             st.plotly_chart(fig_bar, use_container_width=True)
 
-        # --- SEÇÃO: EVOLUÇÃO DE INVESTIMENTOS (COM HOVER CORRIGIDO) ---
+        # --- SEÇÃO: EVOLUÇÃO DE INVESTIMENTOS (VERDE E DINHEIRO) ---
         st.divider()
-        st.subheader(f"🚀 Evolução de Investimentos ({texto_periodo})")
+        st.subheader(f"💰 Evolução de Investimentos ({texto_periodo})")
 
         df_invest = df_para_investimentos[
             df_para_investimentos["Categoria"].str.contains("Investimento", case=False, na=False)]
@@ -142,10 +142,11 @@ try:
                 y='Valor',
                 color='Categoria',
                 markers=True,
-                template="plotly_dark"
+                template="plotly_dark",
+                # Define uma paleta de cores verdes (Greens_r para um tom mais vivo)
+                color_discrete_sequence=px.colors.sequential.Greens_r
             )
 
-            # --- AJUSTE DA CAIXA DE INFORMAÇÕES (HOVER) ---
             fig_invest.update_traces(
                 hovertemplate="<b>Data:</b> %{x|%d/%m/%y}<br>" +
                               "<b>Valor:</b> R$ %{y:,.2f}<extra></extra>"
@@ -163,7 +164,7 @@ try:
             st.plotly_chart(fig_invest, use_container_width=True)
 
             total_inv_periodo = df_invest["Valor"].sum()
-            st.info(f"O valor total investido em {texto_periodo} foi de **R$ {total_inv_periodo:,.2f}**")
+            st.info(f"💸 O valor total investido em {texto_periodo} foi de **R$ {total_inv_periodo:,.2f}**")
         else:
             st.info(f"Nenhum registro de 'Investimento' encontrado para {texto_periodo}.")
 
