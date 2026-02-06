@@ -85,12 +85,12 @@ try:
             df_para_evolucao = df[df["Categoria"].isin(cat_escolhidas)]
             df_para_investimentos = df
             texto_periodo = "Histórico Total"
-            intervalo_ms = 10 * 24 * 60 * 60 * 1000
+            intervalo_ms = 10 * 24 * 60 * 60 * 1000  # 10 dias para (1, 10, 20, 30)
         else:
             df_para_evolucao = df_mes[df_mes["Categoria"].isin(cat_escolhidas)]
             df_para_investimentos = df_mes
             texto_periodo = mes_visual
-            intervalo_ms = 5 * 24 * 60 * 60 * 1000
+            intervalo_ms = 5 * 24 * 60 * 60 * 1000  # 5 dias para (1, 5, 10...)
 
         # --- MÉTRICAS DO MÊS ---
         Receitas_total = df_mes_Receitas['Valor'].sum()
@@ -113,14 +113,13 @@ try:
         st.subheader("📈 Evolução Financeira Detalhada")
 
         df_para_evolucao = df_para_evolucao.copy()
-        # Alterado os rótulos internos do gráfico para Receitas e Despesas
-        df_para_evolucao['Status'] = df_para_evolucao['Valor'].apply(lambda x: 'RECEITAS' if x > 0 else 'DESPESAS')
+        df_para_evolucao['Status'] = df_para_evolucao['Valor'].apply(lambda x: 'ENTRADA' if x > 0 else 'SAÍDA')
 
         df_plot = df_para_evolucao.groupby(['Data', 'Status', 'Categoria'])['Valor'].sum().reset_index()
         df_plot['Valor_Grafico'] = df_plot['Valor'].abs()
 
         fig_evolucao = px.line(df_plot, x='Data', y='Valor_Grafico', color='Status', markers=True,
-                               color_discrete_map={"RECEITAS": "#2ecc71", "DESPESAS": "#e74c3c"},
+                               color_discrete_map={"ENTRADA": "#2ecc71", "SAÍDA": "#e74c3c"},
                                template="plotly_dark", custom_data=['Categoria', 'Valor'],
                                labels={"Valor_Grafico": "Valor (R$)", "Data": "Data"})
 
