@@ -118,8 +118,10 @@ try:
         df_plot = df_para_evolucao.groupby(['Data', 'Status', 'Categoria'])['Valor'].sum().reset_index()
         df_plot['Valor_Grafico'] = df_plot['Valor'].abs()
 
+        # ÚNICA ALTERAÇÃO: Adição do category_orders para fixar Receitas na esquerda e Despesas na direita
         fig_evolucao = px.line(df_plot, x='Data', y='Valor_Grafico', color='Status', markers=True,
                                color_discrete_map={"Receitas": "#2ecc71", "Despesas": "#e74c3c"},
+                               category_orders={"Status": ["Receitas", "Despesas"]},
                                template="plotly_dark", custom_data=['Categoria', 'Valor'],
                                labels={"Valor_Grafico": "Valor (R$)", "Data": "Data"})
 
