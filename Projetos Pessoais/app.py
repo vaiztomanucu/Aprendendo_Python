@@ -135,6 +135,11 @@ try:
         # --- SEÇÃO: EVOLUÇÃO DE INVESTIMENTOS ---
         st.divider()
         st.subheader(f"💰 Evolução de Investimentos ({texto_periodo})")
+
+        # --- NOVA ALTERAÇÃO SOLICITADA: Soma total de todos os investimentos (ignorando filtro mensal) ---
+        total_invest_acumulado = df[df["Categoria"].str.contains("Investimento", case=False, na=False)]["Valor"].sum()
+        st.markdown(f"#### Valor Total Acumulado em Investimentos: **R$ {total_invest_acumulado:,.2f}**")
+
         df_invest = df_para_investimentos[
             df_para_investimentos["Categoria"].str.contains("Investimento", case=False, na=False)]
 
