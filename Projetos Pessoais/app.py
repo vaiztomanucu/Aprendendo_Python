@@ -75,22 +75,24 @@ try:
 
         # --- PREPARAÇÃO DOS DADOS ---
         df_mes = df[df['Mes_Ano'] == mes_selecionado]
-
         df_mes_entradas = df_mes[df_mes['Valor'] > 0]
         df_mes_saidas = df_mes[df_mes['Valor'] < 0]
+
+        # Lógica de Data: Começar sempre no dia 01
+        data_referencia = df['Data'].min().replace(day=1)
 
         if ver_tudo:
             df_para_evolucao = df[df["Categoria"].isin(cat_escolhidas)]
             df_para_investimentos = df
             texto_periodo = "Histórico Total"
-            intervalo_dias = 86400000 * 10
+            intervalo_ms = 10 * 24 * 60 * 60 * 1000  # 10 em 10 dias
         else:
             df_para_evolucao = df_mes[df_mes["Categoria"].isin(cat_escolhidas)]
             df_para_investimentos = df_mes
             texto_periodo = mes_visual
-            intervalo_dias = 86400000 * 5
+            intervalo_ms = 5 * 24 * 60 * 60 * 1000  # 5 em 5 dias
 
-            # --- MÉTRICAS DO MÊS ---
+        # --- MÉTRICAS DO MÊS ---
         entradas_total = df_mes_entradas['Valor'].sum()
         saidas_total = df_mes_saidas['Valor'].sum()
         saldo_mensal = entradas_total + saidas_total
@@ -116,27 +118,35 @@ try:
                                template="plotly_dark", custom_data=['Categoria', 'Valor'],
                                labels={"Valor_Grafico": "Valor (R$)", "Data": "Data"})
 
-        fig_evolucao.update_xaxes(tickformat="%d/%m/%Y", dtick=intervalo_dias, tickmode="linear")
+        fig_evolucao.update_xaxes(
+            tickformat="%d/%m/%Y",
+            dtick=intervalo_ms,
+            tick0=data_referencia,
+            tickmode="linear"
+        )
         fig_evolucao.update_layout(hovermode="closest",
                                    legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1))
         fig_evolucao.update_traces(
             hovertemplate="<b>Data:</b> %{x|%d/%m/%Y}<br><b>Valor Real:</b> R$ %{customdata[1]:,.2f}<br><b>Categoria:</b> %{customdata[0]}<extra></extra>")
         st.plotly_chart(fig_evolucao, use_container_width=True)
 
-        # --- SEÇÃO: EVOLUÇÃO DE INVESTIMENTOS (MOVIDO PARA CIMA) ---
+        # --- SEÇÃO: EVOLUÇÃO DE INVESTIMENTOS ---
         st.divider()
         st.subheader(f"💰 Evolução de Investimentos ({texto_periodo})")
         df_invest = df_para_investimentos[
             df_para_investimentos["Categoria"].str.contains("Investimento", case=False, na=False)]
+
         if not df_invest.empty:
             df_invest_plot = df_invest.groupby(['Data', 'Categoria'])['Valor'].sum().reset_index()
             fig_invest = px.line(df_invest_plot, x='Data', y='Valor', color='Categoria', markers=True,
                                  template="plotly_dark", color_discrete_sequence=px.colors.sequential.Greens_r,
                                  labels={"Valor": "Valor (R$)", "Data": "Data"})
-            fig_invest.update_xaxes(tickformat="%d/%m/%Y", dtick=intervalo_dias, tickmode="linear")
+
+            fig_invest.update_xaxes(tickformat="%d/%m/%Y", dtick=intervalo_ms, tick0=data_referencia, tickmode="linear")
             fig_invest.update_traces(
                 hovertemplate="<b>Data:</b> %{x|%d/%m/%Y}<br><b>Movimentação:</b> R$ %{y:,.2f}<extra></extra>")
             st.plotly_chart(fig_invest, use_container_width=True)
+
             total_inv_periodo = df_invest["Valor"].sum()
             st.info(f"💸 Saldo de movimentações em investimentos em {texto_periodo}: **R$ {total_inv_periodo:,.2f}**")
         else:
@@ -168,29 +178,20 @@ try:
             fig_bar.update_traces(hovertemplate="<b>Status:</b> %{x}<br><b>Total:</b> R$ %{y:,.2f}<extra></extra>")
             st.plotly_chart(fig_bar, use_container_width=True)
 
-            # --- NOVO RESUMO POR CATEGORIA ---
-            st.markdown("### 📋 Resumo de Gastos por Categoria")
-
-            if not df_mes_saidas.empty:
-                # Agrupa, soma os valores (em módulo) e ordena do maior para o menor
-                resumo_cat = (
-                    df_mes_saidas.groupby("Categoria")["Valor"]
-                    .sum()
-                    .abs()
-                    .reset_index()
-                    .sort_values(by="Valor", ascending=False)
-                )
-
-                # Formatação para exibição monetária brasileira
-                resumo_cat["Valor"] = resumo_cat["Valor"].apply(lambda x: f"R$ {x:,.2f}")
-
-                # Exibe a tabela centralizada ou em colunas se preferir
-                st.table(resumo_cat.set_index("Categoria"))
-            else:
-                st.info("Sem gastos registrados para gerar o resumo neste mês.")
-
-            # --- (Segue o código do expander da lista de lançamentos) ---
-            with st.expander(f"🔍 Lista de lançamentos - {mes_visual}"):
+        # --- RESUMO POR CATEGORIA ---
+        st.markdown("### 📋 Resumo de Gastos por Categoria")
+        if not df_mes_saidas.empty:
+            resumo_cat = (
+                df_mes_saidas.groupby("Categoria")["Valor"]
+                .sum()
+                .abs()
+                .reset_index()
+                .sort_values(by="Valor", ascending=False)
+            )
+            resumo_cat["Valor"] = resumo_cat["Valor"].apply(lambda x: f"R$ {x:,.2f}")
+            st.table(resumo_cat.set_index("Categoria"))
+        else:
+            st.info("Sem gastos registrados para este mês.")
 
         with st.expander(f"🔍 Lista de lançamentos - {mes_visual}"):
             st.dataframe(df_mes.sort_values("Data", ascending=False), use_container_width=True)
