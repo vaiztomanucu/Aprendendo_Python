@@ -178,7 +178,6 @@ try:
             df_pizza = df_mes_saidas.copy()
             df_pizza['Valor'] = df_pizza['Valor'].abs()
             if not df_pizza.empty:
-                # AJUSTE 1: Uso da paleta qualitativa padrão do Plotly para maior equilíbrio
                 fig_pizza = px.pie(
                     df_pizza,
                     values="Valor",
@@ -210,7 +209,6 @@ try:
             df_rec_plot = df_rec[df_rec['Recorrência'] != 'Receitas'].groupby("Recorrência")[
                 "Valor_Abs"].sum().reset_index()
 
-            # AJUSTE 2: Cores mais sóbrias e padronizadas para o gráfico de barras
             fig_recorrencia = px.bar(
                 df_rec_plot,
                 x="Recorrência",
@@ -218,9 +216,9 @@ try:
                 color="Recorrência",
                 template="plotly_dark",
                 color_discrete_map={
-                    "Fixos": "#5DADE2",        # Azul equilibrado
-                    "Recorrentes": "#F4D03F",   # Amarelo suave
-                    "Não Recorrentes": "#EB984E" # Laranja terroso
+                    "Fixos": "#5DADE2",          # Azul
+                    "Recorrentes": "#F4D03F",     # Amarelo
+                    "Não Recorrentes": "#e74c3c"  # Alterado para Vermelho
                 },
                 category_orders={"Recorrência": ["Fixos", "Recorrentes", "Não Recorrentes"]},
                 labels={"Valor_Abs": "Total (R$)"}
