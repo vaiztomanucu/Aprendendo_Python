@@ -73,8 +73,11 @@ try:
         lista_cat = sorted([c for c in df["Categoria"].unique().tolist() if c])
         cat_escolhidas = st.sidebar.multiselect("Filtrar Categorias", lista_cat, default=lista_cat)
 
-        # --- PREPARAÇÃO DOS DADOS ---
-        df_mes = df[df['Mes_Ano'] == mes_selecionado]
+        # --- PREPARAÇÃO DOS DADOS (AJUSTADO PARA APLICAR O FILTRO DE CATEGORIAS) ---
+        df_mes_base = df[df['Mes_Ano'] == mes_selecionado]
+        # Aqui aplicamos a seleção do multiselect lateral
+        df_mes = df_mes_base[df_mes_base["Categoria"].isin(cat_escolhidas)]
+
         df_mes_Receitas = df_mes[df_mes['Valor'] > 0]
         df_mes_saidas = df_mes[df_mes['Valor'] < 0]
 
@@ -86,7 +89,7 @@ try:
             texto_periodo = "Histórico Total"
             intervalo_ms = 10 * 24 * 60 * 60 * 1000
         else:
-            df_para_evolucao = df_mes[df_mes["Categoria"].isin(cat_escolhidas)]
+            df_para_evolucao = df_mes
             df_para_investimentos = df_mes
             texto_periodo = mes_visual
             intervalo_ms = 5 * 24 * 60 * 60 * 1000
@@ -96,7 +99,7 @@ try:
         saidas_total = df_mes_saidas['Valor'].sum()
         saldo_mensal = Receitas_total + saidas_total
 
-        data_limite = df_mes['Data'].max()
+        data_limite = df_mes_base['Data'].max()
         saldo_acumulado = df[df['Data'] <= data_limite]['Valor'].sum()
 
         m1, m2, m3, m4 = st.columns(4)
@@ -205,7 +208,6 @@ try:
             df_rec = df_mes_saidas.copy()
             df_rec['Valor_Abs'] = df_rec['Valor'].abs()
 
-            # Filtragem estrita para remover "Receitas" da análise de recorrência de gastos
             df_rec_plot = df_rec[df_rec['Recorrência'] != 'Receitas'].groupby("Recorrência")[
                 "Valor_Abs"].sum().reset_index()
 
@@ -215,11 +217,10 @@ try:
                 y="Valor_Abs",
                 color="Recorrência",
                 template="plotly_dark",
-                # CORES ATUALIZADAS: Tons pastéis tranquilos
                 color_discrete_map={
-                    "Não Recorrentes": "#E57373",  # Vermelho suave
-                    "Recorrentes": "#FFF176",      # Amarelo palha
-                    "Fixos": "#64B5F6"             # Azul tranquilo
+                    "Não Recorrentes": "#E57373",
+                    "Recorrentes": "#FFF176",
+                    "Fixos": "#64B5F6"
                 },
                 labels={"Valor_Abs": "Total (R$)"}
             )
