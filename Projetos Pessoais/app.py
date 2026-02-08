@@ -178,21 +178,13 @@ try:
             df_pizza = df_mes_saidas.copy()
             df_pizza['Valor'] = df_pizza['Valor'].abs()
             if not df_pizza.empty:
-                cores_categorias = {
-                    "Amazon 🎬": "#ADD8E6", "Spotify 🎧": "#006400", "Academia 💪": "#808080",
-                    "Telefone 📞": "#F08080", "Apple 🍎": "#FFFFFF", "Barbeiro 💈": "#8B4513",
-                    "Uber 🚗": "#000000", "Alimentação 🍟": "#FFA500", "Roupas 👕": "#00008B",
-                    "Jogos 🎮": "#8B0000", "Outros ❓": "#800080", "Pensão 💵": "#90EE90",
-                    "Investimento 🏦": "#90EE90"
-                }
-
+                # AJUSTE 1: Uso da paleta qualitativa padrão do Plotly para maior equilíbrio
                 fig_pizza = px.pie(
                     df_pizza,
                     values="Valor",
                     names="Categoria",
                     hole=0.4,
-                    color="Categoria",
-                    color_discrete_map=cores_categorias
+                    color_discrete_sequence=px.colors.qualitative.Plotly
                 )
                 fig_pizza.update_traces(
                     hovertemplate="<b>Categoria:</b> %{label}<br><b>Valor:</b> R$ %{value:,.2f}<br><b>Percentual:</b> %{percent}<extra></extra>")
@@ -218,7 +210,7 @@ try:
             df_rec_plot = df_rec[df_rec['Recorrência'] != 'Receitas'].groupby("Recorrência")[
                 "Valor_Abs"].sum().reset_index()
 
-            # AQUI ESTÁ A ALTERAÇÃO: category_orders define a sequência Fixos -> Recorrentes -> Não Recorrentes
+            # AJUSTE 2: Cores mais sóbrias e padronizadas para o gráfico de barras
             fig_recorrencia = px.bar(
                 df_rec_plot,
                 x="Recorrência",
@@ -226,9 +218,9 @@ try:
                 color="Recorrência",
                 template="plotly_dark",
                 color_discrete_map={
-                    "Não Recorrentes": "#E57373",
-                    "Recorrentes": "#FFF176",
-                    "Fixos": "#64B5F6"
+                    "Fixos": "#5DADE2",        # Azul equilibrado
+                    "Recorrentes": "#F4D03F",   # Amarelo suave
+                    "Não Recorrentes": "#EB984E" # Laranja terroso
                 },
                 category_orders={"Recorrência": ["Fixos", "Recorrentes", "Não Recorrentes"]},
                 labels={"Valor_Abs": "Total (R$)"}
