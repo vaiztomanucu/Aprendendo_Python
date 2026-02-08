@@ -200,7 +200,7 @@ try:
             fig_bar.update_traces(hovertemplate="<b>Status:</b> %{x}<br><b>Total:</b> R$ %{y:,.2f}<extra></extra>")
             st.plotly_chart(fig_bar, use_container_width=True)
 
-        # --- NOVO GRÁFICO: RECORRÊNCIA DOS GASTOS (SOMENTE SAÍDAS) ---
+        # --- NOVO GRÁFICO: RECORRÊNCIA DOS GASTOS ---
         st.subheader("🔄 Recorrência dos Gastos")
         if not df_mes_saidas.empty:
             df_rec = df_mes_saidas.copy()
@@ -216,9 +216,9 @@ try:
                 color="Recorrência",
                 template="plotly_dark",
                 color_discrete_map={
-                    "Fixos": "#5DADE2",          # Azul
-                    "Recorrentes": "#F4D03F",     # Amarelo
-                    "Não Recorrentes": "#e74c3c"  # Alterado para Vermelho
+                    "Fixos": "#5DADE2",
+                    "Recorrentes": "#F4D03F",
+                    "Não Recorrentes": "#e74c3c"
                 },
                 category_orders={"Recorrência": ["Fixos", "Recorrentes", "Não Recorrentes"]},
                 labels={"Valor_Abs": "Total (R$)"}
@@ -260,7 +260,7 @@ try:
         else:
             st.info("Sem gastos registrados para este mês.")
 
-        # --- LISTA DE LANÇAMENTOS ---
+        # --- LISTA DE LANÇAMENTOS COM FILTRO DE ORDENAÇÃO ---
         with st.expander(f"🔍 Lista de lançamentos - {mes_visual}"):
 
             total_receitas_lista = df_mes[df_mes['Valor'] > 0]['Valor'].sum()
@@ -272,11 +272,24 @@ try:
             col_desp.markdown(
                 f"**Total Despesas:** <span style='color:#e74c3c'>R$ {abs(total_despesas_lista):,.2f}</span>",
                 unsafe_allow_html=True)
-            st.write("")
+
+            st.divider()
+
+            # AJUSTE AQUI: Botão de rádio para selecionar a ordem
+            ordem = st.radio(
+                "Ordenar por data:",
+                ["Mais recentes", "Mais antigas"],
+                horizontal=True
+            )
 
             df_lista = df_mes.iloc[:, :-3].copy()
+
+            # Lógica de ordenação baseada no botão selecionado
+            ascendente = True if ordem == "Mais antigas" else False
+            df_lista = df_lista.sort_values("Data", ascending=ascendente)
+
+            # Formatação da data para exibição após a ordenação
             df_lista['Data'] = df_lista['Data'].dt.strftime('%d/%m/%Y')
-            df_lista = df_lista.sort_values("Data", ascending=False)
 
 
             def color_valor(val):
