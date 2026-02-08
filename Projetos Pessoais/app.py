@@ -81,12 +81,18 @@ try:
 
         cat_escolhidas = st.sidebar.multiselect("Filtrar Categorias", lista_cat, key="selecao_categorias")
 
-        # --- PREPARAÇÃO DOS DADOS ---
+        # --- PREPARAÇÃO DOS DADOS (LÓGICA DE FILTRO ADICIONADA) ---
         df_mes_base = df[df['Mes_Ano'] == mes_selecionado]
         df_mes = df_mes_base[df_mes_base["Categoria"].isin(cat_escolhidas)]
 
-        df_mes_Receitas = df_mes[df_mes['Valor'] > 0]
-        df_mes_saidas = df_mes[df_mes['Valor'] < 0]
+        # Criamos uma máscara para identificar o que é investimento
+        is_invest = df_mes['Categoria'].str.contains("Investimento", case=False, na=False)
+
+        # Receitas: (Outros > 0) OU (Investimento < 0 [Resgate])
+        df_mes_Receitas = df_mes[((df_mes['Valor'] > 0) & (~is_invest)) | ((df_mes['Valor'] < 0) & (is_invest))]
+
+        # Saídas: (Outros < 0) OU (Investimento > 0 [Aplicação])
+        df_mes_saidas = df_mes[((df_mes['Valor'] < 0) & (~is_invest)) | ((df_mes['Valor'] > 0) & (is_invest))]
 
         data_referencia = df['Data'].min().replace(day=1)
 
@@ -102,16 +108,23 @@ try:
             intervalo_ms = 5 * 24 * 60 * 60 * 1000
 
         # --- MÉTRICAS DO MÊS ---
-        Receitas_total = df_mes_Receitas['Valor'].sum()
-        saidas_total = df_mes_saidas['Valor'].sum()
-        saldo_mensal = Receitas_total + saidas_total
+        # Somamos os valores absolutos para as métricas de exibição
+        Receitas_total = df_mes_Receitas['Valor'].abs().sum()
+        saidas_total_abs = df_mes_saidas['Valor'].abs().sum()
+        saldo_mensal = Receitas_total - saidas_total_abs
 
         data_limite = df_mes_base['Data'].max()
-        saldo_acumulado = df[df['Data'] <= data_limite]['Valor'].sum()
+
+        # Para o saldo acumulado, precisamos garantir que o investimento positivo subtraia e o negativo some
+        df_acum_temp = df[df['Data'] <= data_limite].copy()
+        is_invest_acum = df_acum_temp['Categoria'].str.contains("Investimento", case=False, na=False)
+        # Invertemos o sinal do investimento para o cálculo do saldo:
+        df_acum_temp.loc[is_invest_acum, 'Valor'] = -df_acum_temp.loc[is_invest_acum, 'Valor']
+        saldo_acumulado = df_acum_temp['Valor'].sum()
 
         m1, m2, m3, m4 = st.columns(4)
         m1.metric("Receitas", f"R$ {Receitas_total:,.2f}")
-        m2.metric("Despesas", f"R$ {abs(saidas_total):,.2f}")
+        m2.metric("Despesas", f"R$ {saidas_total_abs:,.2f}")
         m3.metric("Saldo Mensal", f"R$ {saldo_mensal:,.2f}", delta=f"{saldo_mensal:,.2f}")
         m4.metric("Saldo Acumulado", f"R$ {saldo_acumulado:,.2f}", delta=f"{saldo_acumulado:,.2f}")
 
@@ -121,7 +134,16 @@ try:
         st.subheader("📈 Evolução Financeira Detalhada")
 
         df_para_evolucao = df_para_evolucao.copy()
-        df_para_evolucao['Status'] = df_para_evolucao['Valor'].apply(lambda x: 'Receitas' if x > 0 else 'Despesas')
+
+
+        # Ajuste do status no gráfico para refletir a nova lógica
+        def definir_status(row):
+            if "Investimento" in str(row['Categoria']):
+                return 'Receitas' if row['Valor'] < 0 else 'Despesas'
+            return 'Receitas' if row['Valor'] > 0 else 'Despesas'
+
+
+        df_para_evolucao['Status'] = df_para_evolucao.apply(definir_status, axis=1)
 
         df_plot = df_para_evolucao.groupby(['Data', 'Status', 'Categoria'])['Valor'].sum().reset_index()
         df_plot['Valor_Grafico'] = df_plot['Valor'].abs()
@@ -192,7 +214,7 @@ try:
             st.subheader("Balanço Mensal")
             df_balanco = pd.DataFrame({
                 'Status': ['Receitas', 'Despesas'],
-                'Total': [Receitas_total, abs(saidas_total)]
+                'Total': [Receitas_total, saidas_total_abs]
             })
             fig_bar = px.bar(df_balanco, x='Status', y='Total', color='Status',
                              color_discrete_map={"Receitas": "#2ecc71", "Despesas": "#e74c3c"},
@@ -263,19 +285,15 @@ try:
         # --- LISTA DE LANÇAMENTOS COM FILTRO DE ORDENAÇÃO ---
         with st.expander(f"🔍 Lista de lançamentos - {mes_visual}"):
 
-            total_receitas_lista = df_mes[df_mes['Valor'] > 0]['Valor'].sum()
-            total_despesas_lista = df_mes[df_mes['Valor'] < 0]['Valor'].sum()
-
             col_rec, col_desp = st.columns(2)
-            col_rec.markdown(f"**Total Receitas:** <span style='color:#2ecc71'>R$ {total_receitas_lista:,.2f}</span>",
+            col_rec.markdown(f"**Total Receitas:** <span style='color:#2ecc71'>R$ {Receitas_total:,.2f}</span>",
                              unsafe_allow_html=True)
             col_desp.markdown(
-                f"**Total Despesas:** <span style='color:#e74c3c'>R$ {abs(total_despesas_lista):,.2f}</span>",
+                f"**Total Despesas:** <span style='color:#e74c3c'>R$ {saidas_total_abs:,.2f}</span>",
                 unsafe_allow_html=True)
 
             st.divider()
 
-            # AJUSTE AQUI: Botão de rádio para selecionar a ordem
             ordem = st.radio(
                 "Ordenar por data:",
                 ["Mais recentes", "Mais antigas"],
@@ -283,23 +301,20 @@ try:
             )
 
             df_lista = df_mes.iloc[:, :-3].copy()
-
-            # Lógica de ordenação baseada no botão selecionado
             ascendente = True if ordem == "Mais antigas" else False
             df_lista = df_lista.sort_values("Data", ascending=ascendente)
-
-            # Formatação da data para exibição após a ordenação
             df_lista['Data'] = df_lista['Data'].dt.strftime('%d/%m/%Y')
 
 
-            def color_valor(val):
+            def color_valor_custom(val):
+                # Mantemos as cores visuais, mas a lógica de filtro já separou corretamente acima
                 color = '#2ecc71' if val > 0 else '#e74c3c'
                 return f'color: {color}; font-weight: bold'
 
 
             lista_styled = (
                 df_lista.style
-                .map(color_valor, subset=['Valor'])
+                .map(color_valor_custom, subset=['Valor'])
                 .format({"Valor": "R$ {:,.2f}"})
             )
 
