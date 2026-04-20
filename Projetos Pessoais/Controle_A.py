@@ -27,7 +27,6 @@ def load_single_sheet(label_aba):
     url = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/export?format=csv&gid={gid}"
     df = pd.read_csv(url)
 
-    # Tratamento de Colunas (Valor e Categoria)
     col_valor = 'Valor da Parcela' if 'Valor da Parcela' in df.columns else 'Valor'
     col_cat = 'Categorias' if 'Categorias' in df.columns else 'Categoria'
 
@@ -41,8 +40,14 @@ def load_single_sheet(label_aba):
 
     if 'Data' in df.columns:
         df['Data'] = pd.to_datetime(df['Data'], dayfirst=True, errors='coerce')
-        df['Mes_Ano'] = df['Data'].dt.strftime('%m/%Y')
-        df['Ordem_Mes'] = df['Data'].dt.to_period('M')  # Para ordenar o gráfico corretamente
+        # Criando o nome do mês traduzido de forma simples
+        meses_pt = {
+            1: "Janeiro", 2: "Fevereiro", 3: "Março", 4: "Abril",
+            5: "Maio", 6: "Junho", 7: "Julho", 8: "Agosto",
+            9: "Setembro", 10: "Outubro", 11: "Novembro", 12: "Dezembro"
+        }
+        df['Mes_Nome'] = df['Data'].dt.month.map(meses_pt)
+        df['Ordem_Mes'] = df['Data'].dt.to_period('M')
 
     return df, col_valor, col_cat
 
@@ -57,7 +62,6 @@ meses_do_ano = [k.split()[0] for k in MAPA_GIDS.keys() if k.endswith(ano_sel)]
 mes_sel = st.sidebar.selectbox("Mês Detalhado (Tabela)", meses_do_ano)
 
 try:
-    # 1. CARREGAR TODOS OS MESES DO ANO PARA O GRÁFICO
     lista_dfs_ano = []
     abas_do_ano = [k for k in MAPA_GIDS.keys() if k.endswith(ano_sel)]
 
@@ -66,25 +70,34 @@ try:
         lista_dfs_ano.append(temp_df)
 
     df_anual = pd.concat(lista_dfs_ano, ignore_index=True)
-
-    # 2. SEPARAR O MÊS ESPECÍFICO PARA A TABELA E MÉTRICAS
-    df_mes_especifico = df_anual[df_anual['Data'].dt.strftime('%B').str.capitalize().isin([mes_sel])]
-    # Obs: Se o nome da aba for diferente do nome do mês na data, usamos o filtro pela chave:
-    chave_busca = f"{mes_sel} {ano_sel}"
-    df_mes_especifico = df_anual[df_anual['Data'].isin(load_single_sheet(chave_busca)[0]['Data'])]  # Garantia de match
+    df_mes_especifico = df_anual[df_anual['Mes_Nome'] == mes_sel]
 
     # --- CORPO DO DASHBOARD ---
     st.title(f"📊 Evolução Anual - {ano_sel}")
 
-    # Gráfico de Barras com TODOS os meses do ano selecionado
-    df_grafico = df_anual.groupby(['Ordem_Mes', 'Mes_Ano'])[v_col].sum().reset_index()
-    df_grafico = df_grafico.sort_values('Ordem_Mes')  # Garante que Janeiro venha antes de Fevereiro, etc.
+    # Agrupamento para o gráfico
+    df_grafico = df_anual.groupby(['Ordem_Mes', 'Mes_Nome'])[v_col].sum().reset_index()
+    df_grafico = df_grafico.sort_values('Ordem_Mes')
 
-    fig = px.bar(df_grafico, x='Mes_Ano', y=v_col,
+    # Ajuste do Gráfico
+    fig = px.bar(df_grafico,
+                 x='Mes_Nome',
+                 y=v_col,
                  title=f"Gastos Totais por Mês em {ano_sel}",
-                 labels={'Mes_Ano': 'Mês/Ano', v_col: 'Valor Total (R$)'},
                  template="plotly_dark",
                  color_discrete_sequence=["#9b59b6"])
+
+    # AJUSTE DO HOVER (Removendo os "=" e limpando a visualização)
+    fig.update_traces(
+        hovertemplate="<b>Mês:</b> %{x}<br><b>Valor Total:</b> R$ %{y:,.2f}<extra></extra>"
+    )
+
+    # AJUSTE DOS EIXOS
+    fig.update_layout(
+        xaxis_title=None,
+        yaxis_title="Valor Total (R$)",
+        hovermode="x unified"
+    )
 
     st.plotly_chart(fig, use_container_width=True)
 
@@ -93,16 +106,14 @@ try:
     # --- DETALHAMENTO DO MÊS SELECIONADO ---
     st.subheader(f"💳 Detalhes de {mes_sel} {ano_sel}")
 
-    # Filtro de Categorias apenas para os dados do mês
     lista_cat = sorted(df_mes_especifico[c_col].unique().tolist())
     categorias_sel = st.sidebar.multiselect("Filtrar Categorias (Tabela)", lista_cat, default=lista_cat)
     df_filtrado_mes = df_mes_especifico[df_mes_especifico[c_col].isin(categorias_sel)]
 
-    col1, col2 = st.columns(2)
+    col1, _ = st.columns(2)
     total_mes = df_filtrado_mes[v_col].sum()
-    col1.metric(f"Total {mes_sel}", f"R$ {total_mes:,.2f}")
+    col1.metric(f"Total em {mes_sel}", f"R$ {total_mes:,.2f}")
 
-    # Tabela detalhada
     st.dataframe(
         df_filtrado_mes[['Data', c_col, v_col, 'Descrição (Opcional)']]
         .assign(Data=lambda x: x['Data'].dt.strftime('%d/%m/%Y'))
@@ -113,8 +124,6 @@ try:
     # Resumo por Categoria
     st.markdown("### 📋 Resumo por Categoria")
     resumo_cat = df_filtrado_mes.groupby(c_col)[v_col].sum().reset_index().sort_values(v_col, ascending=False)
-
-    # Adicionar linha de total
     total_geral = resumo_cat[v_col].sum()
     resumo_final = pd.concat([resumo_cat, pd.DataFrame({c_col: ["TOTAL"], v_col: [total_geral]})], ignore_index=True)
 
