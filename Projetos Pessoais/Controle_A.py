@@ -76,7 +76,7 @@ try:
     df_mes_especifico = df_anual[df_anual['Mes_Nome'] == mes_sel]
 
     # --- CORPO DO DASHBOARD ---
-    st.title(f"📊 Evolução Anual - {ano_sel}")
+    st.title(f"📊 Controle da Amanda - {ano_sel}")
 
     # Filtro de Crédito (Exclui Luz e Água via busca parcial para evitar erro de emoji/espaço)
     df_para_grafico = df_anual[~df_anual[c_col].str.contains("Água|Luz", case=False, na=False)]
@@ -85,7 +85,7 @@ try:
     df_grafico = df_grafico.sort_values('Ordem_Mes')
 
     fig = px.bar(df_grafico, x='Mes_Nome', y=v_col,
-                 title=f"Gastos Totais no Crédito por Mês em {ano_sel}",
+                 title=f"Crédito - Total Mensal em {ano_sel}",
                  template="plotly_dark", color_discrete_sequence=["#9b59b6"])
 
     fig.update_traces(hovertemplate="<b>Mês:</b> %{x}<br><b>Valor Total:</b> R$ %{y:,.2f}<extra></extra>")
@@ -108,7 +108,7 @@ try:
     col1, _ = st.columns(2)
     col1.metric(f"Total Fatura {mes_sel}", f"R$ {total_mes_tabela:,.2f}")
 
-    st.markdown("**Lançamentos Detalhados (Apenas Crédito):**")
+    st.markdown("**Lançamentos Detalhados (Crédito):**")
 
     # Adicionada a coluna p_col (Parcelas) na lista de exibição
     colunas_exibir = ['Data', c_col, p_col, v_col, 'Descrição (Opcional)']
