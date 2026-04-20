@@ -62,11 +62,8 @@ ano_sel = st.sidebar.selectbox("Selecione o Ano", anos_disponiveis)
 meses_do_ano = [k.split()[0] for k in MAPA_GIDS.keys() if k.endswith(ano_sel)]
 mes_sel = st.sidebar.selectbox("Mês Detalhado (Tabela)", meses_do_ano)
 
-# --- CORREÇÃO AQUI: Lista de exclusão com os nomes EXATOS da sua planilha ---
-# Dica: Se o erro persistir, use df[c_col].str.contains('Água')
-categorias_excluidas = ["Luz 💡", "Água 💧"]
-
 try:
+    # Carregando todas as abas do ano selecionado
     lista_dfs_ano = []
     abas_do_ano = [k for k in MAPA_GIDS.keys() if k.endswith(ano_sel)]
 
@@ -75,13 +72,16 @@ try:
         lista_dfs_ano.append(temp_df)
 
     df_anual = pd.concat(lista_dfs_ano, ignore_index=True)
+
+    # Filtrando o mês específico para os detalhes
     df_mes_especifico = df_anual[df_anual['Mes_Nome'] == mes_sel]
 
     # --- CORPO DO DASHBOARD ---
     st.title(f"📊 Evolução Anual - {ano_sel}")
 
-    # Filtrar o gráfico (Apenas Crédito)
-    df_para_grafico = df_anual[~df_anual[c_col].isin(categorias_excluidas)]
+    # AJUSTE: Filtro por palavra-chave para garantir que Água e Luz sumam do Gráfico
+    # Usamos .str.contains para ignorar emojis ou espaços extras
+    df_para_grafico = df_anual[~df_anual[c_col].str.contains("Água|Luz", case=False, na=False)]
 
     df_grafico = df_para_grafico.groupby(['Ordem_Mes', 'Mes_Nome'])[v_col].sum().reset_index()
     df_grafico = df_grafico.sort_values('Ordem_Mes')
@@ -97,7 +97,11 @@ try:
         hovertemplate="<b>Mês:</b> %{x}<br><b>Valor Total:</b> R$ %{y:,.2f}<extra></extra>"
     )
 
-    fig.update_layout(xaxis_title=None, yaxis_title="Valor Total (R$)")
+    fig.update_layout(
+        xaxis_title=None,
+        yaxis_title="Valor Total (R$)"
+    )
+
     st.plotly_chart(fig, use_container_width=True)
 
     st.divider()
@@ -110,9 +114,10 @@ try:
 
     df_filtrado_mes = df_mes_especifico[df_mes_especifico[c_col].isin(categorias_sel)]
 
-    # Filtrar a TABELA (Remover Pix/Débito)
-    df_tabela_final = df_filtrado_mes[~df_filtrado_mes[c_col].isin(categorias_excluidas)]
+    # AJUSTE: Filtro por palavra-chave para garantir que Água e Luz sumam da TABELA
+    df_tabela_final = df_filtrado_mes[~df_filtrado_mes[c_col].str.contains("Água|Luz", case=False, na=False)]
 
+    # Métrica do total da fatura
     total_mes_tabela = df_tabela_final[v_col].sum()
     col1, _ = st.columns(2)
     col1.metric(f"Total Fatura {mes_sel}", f"R$ {total_mes_tabela:,.2f}")
@@ -125,7 +130,7 @@ try:
         use_container_width=True, hide_index=True
     )
 
-    # --- RESUMO POR CATEGORIA (Onde Luz e Água aparecem) ---
+    # --- RESUMO POR CATEGORIA (Onde Água e Luz aparecem) ---
     st.divider()
     st.markdown(f"### 📋 Resumo de Gastos por Categoria - {mes_sel}")
 
