@@ -5,9 +5,10 @@ import plotly.express as px
 # --- CONFIGURAÇÃO DA PÁGINA ---
 st.set_page_config(layout="wide", page_title="Controle Financeiro Pessoal")
 
-# --- MAPEAMENTO DOS DADOS (Substitua pelo ID da sua URL) ---
+# --- MAPEAMENTO DOS DADOS ---
 SHEET_ID = "1k2bdTy3nkQZH3PJn5iU_6-KO1Vn2V7iGolv6FBsrHxA"
 
+# Organizei o dicionário para facilitar a extração separada de Mês e Ano
 MAPA_GIDS = {
     "Abril 2026": "1031075012",
     "Maio 2026": "787735977",
@@ -27,7 +28,7 @@ def load_data(label_selecionado):
     url = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/export?format=csv&gid={gid}"
     df = pd.read_csv(url)
 
-    # 1. Identificar coluna de Valor (suporta 'Valor da Parcela' ou 'Valor')
+    # Identificar coluna de Valor
     col_valor = 'Valor da Parcela' if 'Valor da Parcela' in df.columns else 'Valor'
     if col_valor in df.columns:
         df[col_valor] = (
@@ -39,72 +40,74 @@ def load_data(label_selecionado):
         )
         df[col_valor] = pd.to_numeric(df[col_valor], errors='coerce').fillna(0)
 
-    # 2. Identificar coluna de Categoria (suporta 'Categorias' ou 'Categoria')
+    # Identificar coluna de Categoria
     col_cat = 'Categorias' if 'Categorias' in df.columns else 'Categoria'
 
-    # 3. Tratamento de Datas
     if 'Data' in df.columns:
         df['Data'] = pd.to_datetime(df['Data'], dayfirst=True, errors='coerce')
         df = df.dropna(subset=['Data']).sort_values('Data', ascending=False)
-        # Criamos uma coluna de exibição para os gráficos
         df['Mes_Referencia'] = df['Data'].dt.strftime('%m/%Y')
 
     return df, col_valor, col_cat
 
 
-# --- INTERFACE SIDEBAR ---
+# --- INTERFACE SIDEBAR (FILTROS SEPARADOS) ---
 st.sidebar.title("🔍 Filtros")
-selecao_aba = st.sidebar.selectbox("Selecione o Mês/Ano da Planilha", list(MAPA_GIDS.keys()))
+
+# 1. Extrair os anos únicos disponíveis nas chaves do dicionário
+anos_disponiveis = sorted(list(set([k.split()[-1] for k in MAPA_GIDS.keys()])), reverse=True)
+ano_selecionado = st.sidebar.selectbox("Selecione o Ano", anos_disponiveis)
+
+# 2. Filtrar os meses que pertencem ao ano selecionado
+meses_do_ano = [k.split()[0] for k in MAPA_GIDS.keys() if k.endswith(ano_selecionado)]
+mes_selecionado = st.sidebar.selectbox("Selecione o Mês", meses_do_ano)
+
+# Reconstroi a chave original para buscar o GID (ex: "Abril" + " " + "2026")
+chave_final = f"{mes_selecionado} {ano_selecionado}"
 
 try:
-    df, nome_col_valor, nome_col_cat = load_data(selecao_aba)
+    df, nome_col_valor, nome_col_cat = load_data(chave_final)
 
     if df.empty:
-        st.warning(f"A aba '{selecao_aba}' parece não ter dados.")
+        st.warning(f"A aba '{chave_final}' não possui dados.")
     else:
-        # Filtros adicionais na Sidebar
-        ver_tudo = st.sidebar.checkbox("Visualizar histórico completo desta aba", value=True)
-
+        # Filtro de Categorias
         lista_cat = sorted(df[nome_col_cat].unique().tolist())
         categorias_selecionadas = st.sidebar.multiselect("Filtrar Categorias", lista_cat, default=lista_cat)
 
-        # Aplicação dos filtros
         df_filtrado = df[df[nome_col_cat].isin(categorias_selecionadas)]
 
         # --- CORPO DO DASHBOARD ---
-        st.title(f"💳 Cartão de Crédito - {selecao_aba}")
+        st.title(f"💳 Cartão de Crédito - {chave_final}")
 
-        # Métrica Principal
         total_selecionado = df_filtrado[nome_col_valor].sum()
-        st.metric(f"Total em {selecao_aba}", f"R$ {total_selecionado:,.2f}")
+        st.metric(f"Total em {mes_selecionado}/{ano_selecionado}", f"R$ {total_selecionado:,.2f}")
 
-        # Gráfico de Barras (Histórico da aba atual)
+        # Gráfico
         df_grafico = df_filtrado.groupby('Mes_Referencia')[nome_col_valor].sum().reset_index()
         fig = px.bar(df_grafico, x='Mes_Referencia', y=nome_col_valor,
-                     title="Gastos por Período", template="plotly_dark",
+                     title=f"Gastos em {chave_final}", template="plotly_dark",
                      color_discrete_sequence=["#9b59b6"])
         st.plotly_chart(fig, use_container_width=True)
 
-        # Tabela de Lançamentos Detalhada
+        # Lançamentos
         st.markdown("### 📝 Lançamentos Detalhados")
         df_exibicao = df_filtrado[['Data', nome_col_cat, nome_col_valor, 'Descrição (Opcional)']].copy()
         df_exibicao['Data'] = df_exibicao['Data'].dt.strftime('%d/%m/%Y')
         st.dataframe(df_exibicao.style.format({nome_col_valor: "R$ {:.2f}"}), use_container_width=True, hide_index=True)
 
-        # --- RESUMO POR CATEGORIA (COM LINHA VERMELHA) ---
+        # --- RESUMO POR CATEGORIA ---
         st.divider()
         st.markdown("### 📋 Resumo de Gastos por Categoria")
 
         resumo_cat = df_filtrado.groupby(nome_col_cat)[nome_col_valor].sum().reset_index()
         resumo_cat = resumo_cat.sort_values(by=nome_col_valor, ascending=False)
 
-        # Adiciona linha de TOTAL
         total_geral = resumo_cat[nome_col_valor].sum()
         linha_total = pd.DataFrame({nome_col_cat: ["TOTAL"], nome_col_valor: [total_geral]})
         resumo_final = pd.concat([resumo_cat, linha_total], ignore_index=True)
 
 
-        # Função de estilização para o Total
         def highlight_total(row):
             if row[nome_col_cat] == 'TOTAL':
                 return ['background-color: #990000; color: white; font-weight: bold'] * len(row)
@@ -119,4 +122,3 @@ try:
 
 except Exception as e:
     st.error(f"Erro ao carregar dados: {e}")
-    st.info("Dica: Verifique se a planilha está compartilhada como 'Qualquer pessoa com o link'.")
