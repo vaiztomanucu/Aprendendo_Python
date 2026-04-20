@@ -29,6 +29,8 @@ def load_single_sheet(label_aba):
 
     col_valor = 'Valor da Parcela' if 'Valor da Parcela' in df.columns else 'Valor'
     col_cat = 'Categorias' if 'Categorias' in df.columns else 'Categoria'
+    # Identificar coluna de Parcelas
+    col_parc = 'Parcelas' if 'Parcelas' in df.columns else 'Parcela'
 
     if col_valor in df.columns:
         df[col_valor] = (
@@ -50,7 +52,7 @@ def load_single_sheet(label_aba):
         df['Mes_Nome'] = df['Data'].dt.month.map(meses_pt)
         df['Ordem_Mes'] = df['Data'].dt.to_period('M')
 
-    return df, col_valor, col_cat
+    return df, col_valor, col_cat, col_parc
 
 
 # --- INTERFACE SIDEBAR ---
@@ -63,45 +65,31 @@ meses_do_ano = [k.split()[0] for k in MAPA_GIDS.keys() if k.endswith(ano_sel)]
 mes_sel = st.sidebar.selectbox("Mês Detalhado (Tabela)", meses_do_ano)
 
 try:
-    # Carregando todas as abas do ano selecionado
     lista_dfs_ano = []
     abas_do_ano = [k for k in MAPA_GIDS.keys() if k.endswith(ano_sel)]
 
     for aba in abas_do_ano:
-        temp_df, v_col, c_col = load_single_sheet(aba)
+        temp_df, v_col, c_col, p_col = load_single_sheet(aba)
         lista_dfs_ano.append(temp_df)
 
     df_anual = pd.concat(lista_dfs_ano, ignore_index=True)
-
-    # Filtrando o mês específico para os detalhes
     df_mes_especifico = df_anual[df_anual['Mes_Nome'] == mes_sel]
 
     # --- CORPO DO DASHBOARD ---
     st.title(f"📊 Evolução Anual - {ano_sel}")
 
-    # AJUSTE: Filtro por palavra-chave para garantir que Água e Luz sumam do Gráfico
-    # Usamos .str.contains para ignorar emojis ou espaços extras
+    # Filtro de Crédito (Exclui Luz e Água via busca parcial para evitar erro de emoji/espaço)
     df_para_grafico = df_anual[~df_anual[c_col].str.contains("Água|Luz", case=False, na=False)]
 
     df_grafico = df_para_grafico.groupby(['Ordem_Mes', 'Mes_Nome'])[v_col].sum().reset_index()
     df_grafico = df_grafico.sort_values('Ordem_Mes')
 
-    fig = px.bar(df_grafico,
-                 x='Mes_Nome',
-                 y=v_col,
+    fig = px.bar(df_grafico, x='Mes_Nome', y=v_col,
                  title=f"Gastos Totais no Crédito por Mês em {ano_sel}",
-                 template="plotly_dark",
-                 color_discrete_sequence=["#9b59b6"])
+                 template="plotly_dark", color_discrete_sequence=["#9b59b6"])
 
-    fig.update_traces(
-        hovertemplate="<b>Mês:</b> %{x}<br><b>Valor Total:</b> R$ %{y:,.2f}<extra></extra>"
-    )
-
-    fig.update_layout(
-        xaxis_title=None,
-        yaxis_title="Valor Total (R$)"
-    )
-
+    fig.update_traces(hovertemplate="<b>Mês:</b> %{x}<br><b>Valor Total:</b> R$ %{y:,.2f}<extra></extra>")
+    fig.update_layout(xaxis_title=None, yaxis_title="Valor Total (R$)")
     st.plotly_chart(fig, use_container_width=True)
 
     st.divider()
@@ -111,34 +99,35 @@ try:
 
     lista_cat = sorted(df_mes_especifico[c_col].unique().tolist())
     categorias_sel = st.sidebar.multiselect("Filtrar Categorias (Tabela)", lista_cat, default=lista_cat)
-
     df_filtrado_mes = df_mes_especifico[df_mes_especifico[c_col].isin(categorias_sel)]
 
-    # AJUSTE: Filtro por palavra-chave para garantir que Água e Luz sumam da TABELA
+    # Filtro para a Tabela (Exclui Luz e Água)
     df_tabela_final = df_filtrado_mes[~df_filtrado_mes[c_col].str.contains("Água|Luz", case=False, na=False)]
 
-    # Métrica do total da fatura
     total_mes_tabela = df_tabela_final[v_col].sum()
     col1, _ = st.columns(2)
     col1.metric(f"Total Fatura {mes_sel}", f"R$ {total_mes_tabela:,.2f}")
 
     st.markdown("**Lançamentos Detalhados (Apenas Crédito):**")
+
+    # Adicionada a coluna p_col (Parcelas) na lista de exibição
+    colunas_exibir = ['Data', c_col, p_col, v_col, 'Descrição (Opcional)']
+
     st.dataframe(
-        df_tabela_final[['Data', c_col, v_col, 'Descrição (Opcional)']]
+        df_tabela_final[colunas_exibir]
         .assign(Data=lambda x: x['Data'].dt.strftime('%d/%m/%Y'))
         .style.format({v_col: "R$ {:.2f}"}),
         use_container_width=True, hide_index=True
     )
 
-    # --- RESUMO POR CATEGORIA (Onde Água e Luz aparecem) ---
+    # --- RESUMO POR CATEGORIA ---
     st.divider()
     st.markdown(f"### 📋 Resumo de Gastos por Categoria - {mes_sel}")
 
     resumo_cat = df_filtrado_mes.groupby(c_col)[v_col].sum().reset_index().sort_values(v_col, ascending=False)
-
     total_geral_resumo = resumo_cat[v_col].sum()
-    linha_total = pd.DataFrame({c_col: ["TOTAL"], v_col: [total_geral_resumo]})
-    resumo_final = pd.concat([resumo_cat, linha_total], ignore_index=True)
+    resumo_final = pd.concat([resumo_cat, pd.DataFrame({c_col: ["TOTAL"], v_col: [total_geral_resumo]})],
+                             ignore_index=True)
 
 
     def highlight_total(row):
