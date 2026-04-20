@@ -40,7 +40,6 @@ def load_single_sheet(label_aba):
 
     if 'Data' in df.columns:
         df['Data'] = pd.to_datetime(df['Data'], dayfirst=True, errors='coerce')
-        # Criando o nome do mês traduzido de forma simples
         meses_pt = {
             1: "Janeiro", 2: "Fevereiro", 3: "Março", 4: "Abril",
             5: "Maio", 6: "Junho", 7: "Julho", 8: "Agosto",
@@ -75,35 +74,35 @@ try:
     # --- CORPO DO DASHBOARD ---
     st.title(f"📊 Evolução Anual - {ano_sel}")
 
-    # Agrupamento para o gráfico
-    df_grafico = df_anual.groupby(['Ordem_Mes', 'Mes_Nome'])[v_col].sum().reset_index()
+    # --- AJUSTE SOLICITADO: FILTRAR CATEGORIAS APENAS PARA O GRÁFICO ---
+    # Aqui listamos as categorias que NÃO devem entrar na soma do gráfico de crédito
+    # Certifique-se de que o nome está exatamente igual (incluindo emojis) à planilha
+    categorias_excluidas_grafico = ["Luz 💡", "Água 💧"]
+
+    df_para_grafico = df_anual[~df_anual[c_col].isin(categorias_excluidas_grafico)]
+
+    df_grafico = df_para_grafico.groupby(['Ordem_Mes', 'Mes_Nome'])[v_col].sum().reset_index()
     df_grafico = df_grafico.sort_values('Ordem_Mes')
 
-    # Ajuste do Gráfico
     fig = px.bar(df_grafico,
                  x='Mes_Nome',
                  y=v_col,
-                 title=f"Gastos Totais por Mês em {ano_sel}",
+                 title=f"Gastos Totais no Crédito por Mês em {ano_sel} (Exclui Luz/Água)",
                  template="plotly_dark",
                  color_discrete_sequence=["#9b59b6"])
 
-    # AJUSTE DO HOVER (Removendo os "=" e limpando a visualização)
     fig.update_traces(
-        hovertemplate="<b>Mês:</b> %{x}<br><b>Valor Total:</b> R$ %{y:,.2f}<extra></extra>"
+        hovertemplate="<b>Mês:</b> %{x}<br><b>Crédito:</b> R$ %{y:,.2f}<extra></extra>"
     )
 
-    # AJUSTE DOS EIXOS
-    fig.update_layout(
-        xaxis_title=None,
-        yaxis_title="Valor Total (R$)",
-        hovermode="x unified"
-    )
+    fig.update_layout(xaxis_title=None, yaxis_title="Valor no Crédito (R$)")
 
     st.plotly_chart(fig, use_container_width=True)
 
     st.divider()
 
     # --- DETALHAMENTO DO MÊS SELECIONADO ---
+    # (A tabela e o resumo continuam mostrando TUDO, incluindo Luz e Água)
     st.subheader(f"💳 Detalhes de {mes_sel} {ano_sel}")
 
     lista_cat = sorted(df_mes_especifico[c_col].unique().tolist())
@@ -112,7 +111,7 @@ try:
 
     col1, _ = st.columns(2)
     total_mes = df_filtrado_mes[v_col].sum()
-    col1.metric(f"Total em {mes_sel}", f"R$ {total_mes:,.2f}")
+    col1.metric(f"Total Geral em {mes_sel}", f"R$ {total_mes:,.2f}")
 
     st.dataframe(
         df_filtrado_mes[['Data', c_col, v_col, 'Descrição (Opcional)']]
@@ -122,7 +121,7 @@ try:
     )
 
     # Resumo por Categoria
-    st.markdown("### 📋 Resumo por Categoria")
+    st.markdown("### 📋 Resumo por Categoria (Crédito + Pix)")
     resumo_cat = df_filtrado_mes.groupby(c_col)[v_col].sum().reset_index().sort_values(v_col, ascending=False)
     total_geral = resumo_cat[v_col].sum()
     resumo_final = pd.concat([resumo_cat, pd.DataFrame({c_col: ["TOTAL"], v_col: [total_geral]})], ignore_index=True)
